@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>nanoFramework.Runtime.InFieldUpdate</id>
+    <version>$version$</version>
+    <title>nanoFramework.Runtime.InFieldUpdate</title>
+    <authors>nanoframework</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="file">LICENSE.md</license>
+    <releaseNotes>
+    </releaseNotes>
+    <readme>docs\README.md</readme>
+    <developmentDependency>false</developmentDependency>
+    <projectUrl>https://github.com/nanoframework/nanoFramework.Runtime.InFieldUpdate</projectUrl>
+    <icon>images\nf-logo.png</icon>
+    <repository type="git" url="https://github.com/nanoframework/nanoFramework.Runtime.InFieldUpdate" commit="$commit$" />
+    <copyright>Copyright (c) .NET Foundation and Contributors</copyright>
+    <description>This package includes the nanoFramework Runtime.InFieldUpdate assembly for .NET nanoFramework C# projects.
+This package requires a target with nanoFramework.Runtime.InFieldUpdate v$nativeVersion$ (checksum $checksum$).</description>
+    <tags>nanoFramework C# csharp netmf netnf </tags>
+    <dependencies>
+      <dependency id="nanoFramework.CoreLibrary" version="1.17.11" />
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="nanoFramework.Runtime.InFieldUpdate\bin\Release\nanoFramework.Runtime.InFieldUpdate.dll" target="lib\nanoFramework.Runtime.InFieldUpdate.dll" />
+    <file src="nanoFramework.Runtime.InFieldUpdate\bin\Release\nanoFramework.Runtime.InFieldUpdate.pdb" target="lib\nanoFramework.Runtime.InFieldUpdate.pdb" />
+    <file src="nanoFramework.Runtime.InFieldUpdate\bin\Release\nanoFramework.Runtime.InFieldUpdate.pdbx" target="lib\nanoFramework.Runtime.InFieldUpdate.pdbx" />
+    <file src="nanoFramework.Runtime.InFieldUpdate\bin\Release\nanoFramework.Runtime.InFieldUpdate.pe" target="lib\nanoFramework.Runtime.InFieldUpdate.pe" />
+    <file src="nanoFramework.Runtime.InFieldUpdate\bin\Release\nanoFramework.Runtime.InFieldUpdate.xml" target="lib\nanoFramework.Runtime.InFieldUpdate.xml" />
+    <!-- readme -->
+    <file src="assets\readme.txt" target="" />
+    <file src="README.md" target="docs\" />
+    <file src="assets\nf-logo.png" target="images" />
+    <file src="LICENSE.md" target="" />
+  </files>
+</package>
