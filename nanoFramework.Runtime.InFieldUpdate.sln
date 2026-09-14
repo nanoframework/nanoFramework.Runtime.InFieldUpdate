@@ -1,0 +1,34 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37614.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{11A8DD76-328B-46DF-9F39-F559912D0360}") = "nanoFramework.Runtime.InFieldUpdate", "nanoFramework.Runtime.InFieldUpdate\nanoFramework.Runtime.InFieldUpdate.nfproj", "{14DB627F-DAB1-4D00-856B-A250F0D7131B}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{8EC462FD-D22E-90A8-E5CE-7E832BA40C5D}"
+	ProjectSection(SolutionItems) = preProject
+		nanoFramework.Runtime.InFieldUpdate.nuspec = nanoFramework.Runtime.InFieldUpdate.nuspec
+		README.md = README.md
+		version.json = version.json
+	EndProjectSection
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{14DB627F-DAB1-4D00-856B-A250F0D7131B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{14DB627F-DAB1-4D00-856B-A250F0D7131B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{14DB627F-DAB1-4D00-856B-A250F0D7131B}.Debug|Any CPU.Deploy.0 = Debug|Any CPU
+		{14DB627F-DAB1-4D00-856B-A250F0D7131B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{14DB627F-DAB1-4D00-856B-A250F0D7131B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{14DB627F-DAB1-4D00-856B-A250F0D7131B}.Release|Any CPU.Deploy.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {8335D9E0-E214-4A62-A8ED-FF7753F4E0B2}
+	EndGlobalSection
+EndGlobal
