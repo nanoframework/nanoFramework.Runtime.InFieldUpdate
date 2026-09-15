@@ -78,7 +78,7 @@ namespace nanoFramework.Runtime.InFieldUpdate
         /// <inheritdoc/>
         public override string ToString()
         {
-            return Image + " " + Slot + ": v" + (Version == null ? "-" : Version.ToString());
+            return ImageInfoExtensions.GetImageName(Image) + " " + Slot + ": v" + (Version == null ? "-" : Version.ToString());
         }
     }
 }

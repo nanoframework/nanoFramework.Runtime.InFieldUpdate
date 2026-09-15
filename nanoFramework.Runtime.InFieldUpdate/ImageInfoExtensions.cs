@@ -51,11 +51,9 @@ namespace nanoFramework.Runtime.InFieldUpdate
             return table;
         }
 
-        private static string[] GetRow(ImageInfo image)
-        {
-            return new string[]
+        private static string[] GetRow(ImageInfo image) => new string[]
             {
-                image.Image.ToString(),
+                GetImageName(image.Image),
                 image.Slot.ToString(),
                 image.Version == null ? "-" : image.Version.ToString(),
                 YesNo(image.HasValidHeader),
@@ -65,11 +63,20 @@ namespace nanoFramework.Runtime.InFieldUpdate
                 YesNo(image.IsBootable),
                 YesNo(image.IsRollbackPending)
             };
-        }
 
         private static string YesNo(bool value)
         {
             return value ? "Yes" : "No";
+        }
+
+        internal static string GetImageName(ImageType image)
+        {
+            return image switch
+            {
+                ImageType.NanoClr => "nanoCLR",
+                ImageType.Deployment => "Deployment",
+                _ => image.ToString(),
+            };
         }
 
         private static int[] GetColumnWidths(string[][] rows)
