@@ -11,7 +11,7 @@ namespace nanoFramework.Runtime.InFieldUpdate
     /// </summary>
     public static class ImageInfoExtensions
     {
-        private static readonly string[] Headers = new string[]
+        internal static readonly string[] Headers = new string[]
         {
             "Image", "Slot", "Version", "Valid", "Active", "Confirmed", "Pending", "Bootable", "Rollback"
         };
@@ -51,7 +51,7 @@ namespace nanoFramework.Runtime.InFieldUpdate
             return table;
         }
 
-        private static string[] GetRow(ImageInfo image) => new string[]
+        internal static string[] GetRow(ImageInfo image) => new string[]
             {
                 GetImageName(image.Image),
                 image.Slot.ToString(),
