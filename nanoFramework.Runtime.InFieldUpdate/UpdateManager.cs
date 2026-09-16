@@ -108,16 +108,10 @@ namespace nanoFramework.Runtime.InFieldUpdate
         //----------------------------------------------------------------------
 
         /// <summary>
-        /// Confirms (makes permanent) the deployment image after validation passes. If not called
-        /// while the deployment image is in test state, the previous image is restored on the next
-        /// reset.
+        /// Confirms (makes permanent) the <see cref="ImageType.Deployment"/> validation. If not called
+        /// while the deployment image is in test state, the previous image is restored on the next reboot.
         /// </summary>
         /// <returns><see langword="true"/> if the image was confirmed; otherwise, <see langword="false"/>.</returns>
-        /// <remarks>
-        /// There is no equivalent method for the nanoCLR image: it is auto-confirmed at startup, so
-        /// managed code never confirms it. Callers must call this method to prevent the deployment
-        /// image from being reverted on the next reset.
-        /// </remarks>
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool ConfirmDeploymentImage();
 

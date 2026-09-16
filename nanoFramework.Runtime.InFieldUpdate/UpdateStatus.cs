@@ -16,8 +16,7 @@ namespace nanoFramework.Runtime.InFieldUpdate
         Confirmed = 0,
 
         /// <summary>
-        /// Running an unconfirmed test image. Unless confirmed, the previous image is restored on
-        /// the next reset.
+        /// Running an unconfirmed test image. Unless confirmed, the previous image is restored on the next reboot.
         /// </summary>
         Testing = 1,
 
