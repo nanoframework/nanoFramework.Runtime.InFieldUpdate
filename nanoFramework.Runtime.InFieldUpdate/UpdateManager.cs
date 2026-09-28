@@ -1,4 +1,4 @@
-//
+﻿//
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 //
@@ -71,37 +71,210 @@ namespace nanoFramework.Runtime.InFieldUpdate
         /// <remarks>
         /// <b>Destructive.</b> This erases the whole secondary slot of the given image. Any update
         /// image previously staged there is permanently lost and cannot be recovered. Only call this
-        /// when you are about to write a fresh image, or to deliberately discard a staged update.
+        /// to deliberately discard a staged update; <see cref="StartUpdateSession(ImageType, int)"/>
+        /// erases the slot itself. Fails (<see cref="UpdateSessionResult.Busy"/>) while an update
+        /// session is open on the image by any writer.
         /// </remarks>
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool EraseSecondaryImage(ImageType image);
 
+        //----------------------------------------------------------------------
+        // Update sessions
+        //----------------------------------------------------------------------
+
         /// <summary>
-        /// Writes a chunk of image data into the secondary (staging) slot of the given image.
+        /// Opens an update session for the given image: claims the secondary (staging) slot for this
+        /// writer, erases it and returns a handle that authorises writing the image in chunks.
         /// </summary>
-        /// <param name="image">Which image the chunk belongs to.</param>
-        /// <param name="data">Buffer containing the image bytes.</param>
-        /// <param name="offset">Byte offset within the secondary slot to begin writing.</param>
-        /// <param name="length">Number of bytes to write from <paramref name="data"/>.</param>
-        /// <returns><see langword="true"/> if the chunk was written; otherwise, <see langword="false"/>.</returns>
-        /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.</exception>
-        /// <exception cref="ArgumentOutOfRangeException">
-        /// <paramref name="offset"/> or <paramref name="length"/> is negative, or
-        /// <paramref name="length"/> is greater than the length of <paramref name="data"/>.
-        /// </exception>
+        /// <param name="image">Which image will be staged.</param>
+        /// <param name="totalLength">
+        /// Total length of the image to stage (MCUboot header, payload and TLV area) - typically the
+        /// download's content length.
+        /// </param>
+        /// <returns>
+        /// An open <see cref="UpdateSession"/>, or <c>null</c> if the session could not be opened.
+        /// The reason is available from <see cref="GetLastSessionError"/>:
+        /// <see cref="UpdateSessionResult.Busy"/> when another writer holds a session on the image,
+        /// <see cref="UpdateSessionResult.SwapInFlight"/> when a swap is already scheduled,
+        /// <see cref="UpdateSessionResult.TooLarge"/> when the image does not fit the slot,
+        /// <see cref="UpdateSessionResult.FlashError"/> when the erase failed.
+        /// </returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="totalLength"/> is not positive.</exception>
         /// <remarks>
-        /// Callers invoke this in a loop with sequential offsets. The first write (<paramref
-        /// name="offset"/> == 0) erases the secondary slot to guarantee clean storage and validates
-        /// the new image before accepting further chunks. Staging is decoupled from applying: writing
-        /// chunks does not itself schedule a swap - the caller applies the update on its own terms
-        /// (for the deployment image: reboot, then <see cref="ConfirmDeploymentImage"/> after
-        /// validation, or <see cref="RequestDeploymentRevert"/>; for the nanoCLR image:
-        /// <see cref="RequestClrRevert"/> or a host-driven flow).
-        /// This method is stateless across calls; only one thread should stage a given image at a
-        /// time, since interleaved offsets from two writers corrupt the staged image.
+        /// <para>
+        /// Only one session can be open per image across managed code, the Wire Protocol and native
+        /// code. Opening a session while this same writer already holds one replaces the previous
+        /// session, so an abandoned handle can never wedge the image.
+        /// </para>
+        /// <para>
+        /// Sessions live in RAM: every reboot releases them, including a CLR-only restart such as a
+        /// deployment from Visual Studio. What was already written to the slot is not affected, so an
+        /// interrupted download continues with
+        /// <see cref="ResumeUpdateSession(ImageType, int, byte[])"/>.
+        /// </para>
+        /// <para>
+        /// <b>Destructive:</b> the whole secondary slot is erased before this returns, which can take
+        /// a few seconds on large external flash. Any image previously staged there is lost. To
+        /// continue a download that was interrupted, use
+        /// <see cref="ResumeUpdateSession(ImageType, int, byte[])"/> instead.
+        /// </para>
         /// </remarks>
         [MethodImpl(MethodImplOptions.InternalCall)]
-        public static extern bool StoreImageChunk(ImageType image, byte[] data, int offset, int length);
+        public static extern UpdateSession StartUpdateSession(ImageType image, int totalLength);
+
+        /// <summary>
+        /// Reopens an update session on an image that was partially stored in the secondary slot by
+        /// an earlier session - for example one interrupted by a reboot or a lost connection - so the
+        /// download can continue from <see cref="UpdateSession.NextOffset"/> instead of starting over.
+        /// </summary>
+        /// <param name="image">Which image is being staged.</param>
+        /// <param name="totalLength">Total length of the image, as for <see cref="StartUpdateSession(ImageType, int)"/>.</param>
+        /// <param name="expectedHeader">
+        /// The first bytes of the image being downloaded (up to 32, the MCUboot header), or
+        /// <c>null</c> to skip the check. Strongly recommended: after a completed swap the secondary
+        /// slot holds the <i>previous</i> image with a perfectly valid header, and only the caller can
+        /// tell that apart from a paused download. A 32-byte HTTP range request (<c>bytes=0-31</c>)
+        /// is enough to obtain it.
+        /// </param>
+        /// <returns>
+        /// An open <see cref="UpdateSession"/> positioned at the offset to continue from, or <c>null</c>
+        /// if nothing resumable is there. <see cref="GetLastSessionError"/> then reports
+        /// <see cref="UpdateSessionResult.NoImage"/> (slot erased or too little stored - start fresh),
+        /// <see cref="UpdateSessionResult.HeaderMismatch"/> (a different image is stored),
+        /// <see cref="UpdateSessionResult.Busy"/>, <see cref="UpdateSessionResult.SwapInFlight"/>,
+        /// <see cref="UpdateSessionResult.TooLarge"/> or <see cref="UpdateSessionResult.FlashError"/>.
+        /// </returns>
+        /// <exception cref="ArgumentOutOfRangeException"><paramref name="totalLength"/> is not positive.</exception>
+        /// <remarks>
+        /// <para>
+        /// No bookkeeping is kept for this: the secondary slot itself is the state. The runtime reads
+        /// the MCUboot header already stored, finds how far the previous session got (the last byte
+        /// that is not erased flash), rewinds to the start of the erase block containing that point
+        /// and erases that block again - a block that was being programmed when power failed cannot
+        /// be repaired by rewriting it. The returned <see cref="UpdateSession.NextOffset"/> is
+        /// therefore at most the amount previously stored, and the caller re-sends from there.
+        /// </para>
+        /// <para>
+        /// If the whole image had already been stored, <see cref="UpdateSession.NextOffset"/> equals
+        /// <see cref="UpdateSession.TotalLength"/> and the caller can go straight to
+        /// <see cref="CompleteUpdateSession(UpdateSession)"/>.
+        /// </para>
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern UpdateSession ResumeUpdateSession(ImageType image, int totalLength, byte[] expectedHeader);
+
+        /// <summary>
+        /// Appends a chunk of image data to the image being staged by <paramref name="session"/>.
+        /// </summary>
+        /// <param name="session">The open session, from <see cref="StartUpdateSession(ImageType, int)"/> or <see cref="ResumeUpdateSession(ImageType, int, byte[])"/>.</param>
+        /// <param name="data">Buffer holding the chunk.</param>
+        /// <param name="offset">Zero-based offset in <paramref name="data"/> at which the chunk begins.</param>
+        /// <param name="count">Number of bytes to write from <paramref name="data"/>.</param>
+        /// <returns><see langword="true"/> if the chunk was written; otherwise, <see langword="false"/>.</returns>
+        /// <exception cref="ArgumentNullException"><paramref name="session"/> or <paramref name="data"/> is <see langword="null"/>.</exception>
+        /// <exception cref="ArgumentOutOfRangeException">
+        /// <paramref name="offset"/> or <paramref name="count"/> is negative, or their sum is greater
+        /// than the length of <paramref name="data"/>.
+        /// </exception>
+        /// <remarks>
+        /// <para>
+        /// <paramref name="offset"/> and <paramref name="count"/> follow the <c>Stream.Write</c>
+        /// convention: they index into <paramref name="data"/>. The position in the image is not a
+        /// parameter - every chunk is appended at <see cref="UpdateSession.NextOffset"/>, which the
+        /// runtime advances by <paramref name="count"/> on success. Chunks are therefore sequential by
+        /// construction and cannot interleave with another writer's.
+        /// </para>
+        /// <para>
+        /// The first chunk of a fresh session must hold at least the 32-byte MCUboot header with a
+        /// valid magic (<see cref="UpdateSessionResult.BadMagic"/> otherwise). Writing past
+        /// <see cref="UpdateSession.TotalLength"/> fails with <see cref="UpdateSessionResult.TooLarge"/>;
+        /// a stale or foreign session - including one released by a device or CLR restart - fails with
+        /// <see cref="UpdateSessionResult.BadToken"/>. On failure the position does not advance and
+        /// the chunk may be retried.
+        /// </para>
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool StoreImageChunk(UpdateSession session, byte[] data, int offset, int count);
+
+        /// <summary>
+        /// Verifies the staged image and, if it is intact, marks it pending so that MCUboot swaps it
+        /// in on the next reboot as a revertible test image. Closes the session.
+        /// </summary>
+        /// <param name="session">The open session.</param>
+        /// <returns>
+        /// <see cref="UpdateSessionResult.Success"/> when the image is verified and pending;
+        /// <see cref="UpdateSessionResult.Incomplete"/> when fewer than <see cref="UpdateSession.TotalLength"/>
+        /// bytes have been stored (the session stays open and writable);
+        /// <see cref="UpdateSessionResult.BadMagic"/>, <see cref="UpdateSessionResult.BadTlv"/> or
+        /// <see cref="UpdateSessionResult.HashMismatch"/> when the staged image is not intact (the
+        /// session is closed, the slot is left as is);
+        /// <see cref="UpdateSessionResult.BadToken"/> for a stale or foreign session.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// <para>
+        /// Verification is structural plus a SHA-256 of the image compared with the digest in its
+        /// TLV area, so a corrupt or mismatched download is caught here, before any reboot. The
+        /// signature is verified by MCUboot at boot time as usual.
+        /// </para>
+        /// <para>
+        /// Typical flow for the deployment image: <c>CompleteUpdateSession</c> returns
+        /// <see cref="UpdateSessionResult.Success"/>, the application calls <see cref="RequestReboot"/>,
+        /// MCUboot swaps the image in, the new application validates itself and calls
+        /// <see cref="ConfirmDeploymentImage"/>; if it does not, the previous image is restored on the
+        /// following reboot.
+        /// </para>
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern UpdateSessionResult CompleteUpdateSession(UpdateSession session);
+
+        /// <summary>
+        /// Closes an update session without completing it.
+        /// </summary>
+        /// <param name="session">The open session.</param>
+        /// <param name="eraseSlot">
+        /// <see langword="true"/> to erase the secondary slot, discarding whatever was staged;
+        /// <see langword="false"/> to leave the partial image in place so that
+        /// <see cref="ResumeUpdateSession(ImageType, int, byte[])"/> can pick it up later (pause).
+        /// </param>
+        /// <returns>
+        /// <see langword="true"/> when the session was closed and, if requested, the slot erased;
+        /// <see langword="false"/> for a stale or foreign session
+        /// (<see cref="UpdateSessionResult.BadToken"/>), or when the erase failed
+        /// (<see cref="UpdateSessionResult.FlashError"/>).
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// A session the runtime recognised is released whatever the erase did, so there is nothing
+        /// to retry: calling this again only returns <see cref="UpdateSessionResult.BadToken"/>. When
+        /// a requested erase failed the slot may still hold part of the image; discard it with
+        /// <see cref="EraseSecondaryImage(ImageType)"/>, or simply open a fresh session, which erases
+        /// the slot anyway.
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern bool AbortUpdateSession(UpdateSession session, bool eraseSlot);
+
+        /// <summary>
+        /// Reports who currently holds an update session on the given image.
+        /// </summary>
+        /// <param name="image">Which image to query.</param>
+        /// <returns>The owner, or <see cref="UpdateSessionOwner.None"/> when no session is open.</returns>
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern UpdateSessionOwner GetUpdateSessionOwner(ImageType image);
+
+        /// <summary>
+        /// Returns the outcome the runtime recorded for the most recent update session operation -
+        /// the reason behind a <c>null</c> or <see langword="false"/> return.
+        /// </summary>
+        /// <returns>The last <see cref="UpdateSessionResult"/> recorded by a session operation.</returns>
+        /// <remarks>
+        /// Read it immediately after the call that failed. The runtime keeps one value for the whole
+        /// device, updated by every session operation - successful ones included, and those of other
+        /// writers such as a host uploading over the Wire Protocol - so it is a diagnostic aid rather
+        /// than a per-caller error channel.
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern UpdateSessionResult GetLastSessionError();
 
         //----------------------------------------------------------------------
         // Confirm / revert

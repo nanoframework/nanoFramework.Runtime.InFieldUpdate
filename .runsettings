@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+    <RunConfiguration>
+        <MaxCpuCount>1</MaxCpuCount>
+        <ResultsDirectory>.\TestResults</ResultsDirectory><!-- Path relative to solution directory -->
+        <!-- Every StartUpdateSession erases the whole 768 kB secondary slot on the external SPI
+             flash (24 x 32 kB blocks). That is several seconds typically and up to ~30 s at the
+             datasheet worst case, and the suite does it dozens of times. Budget for the worst case:
+             the run is otherwise reported as "Tests timed out" with nothing to show for it. -->
+        <TestSessionTimeout>2700000</TestSessionTimeout><!-- Milliseconds (45 min) -->
+        <TargetFrameworkVersion>net48</TargetFrameworkVersion>
+        <TargetPlatform>x64</TargetPlatform>
+    </RunConfiguration>
+    <nanoFrameworkAdapter>
+        <!-- Detailed is the MOST inclusive level, not the least: the adapter filters with
+             `messageLevel >= Logging` over None=0, Detailed=1, Verbose=2, Error=3. At Verbose the
+             deployment progress and the debug library's own errors (both logged as Detailed) are
+             hidden, which makes a slow or stalled deployment look identical to a hung device. -->
+        <Logging>Detailed</Logging><!-- None, Detailed, Verbose, Error -->
+        <!-- The IFU native assembly only exists on MCUboot targets, so these tests cannot run on
+             the Windows nanoCLR. Point this at a device running an MCUboot firmware built with
+             API_nanoFramework.Runtime.InFieldUpdate. -->
+        <IsRealHardware>True</IsRealHardware>
+        <RealHardwarePort></RealHardwarePort><!-- empty: use the first device found -->
+    </nanoFrameworkAdapter>
+</RunSettings>
