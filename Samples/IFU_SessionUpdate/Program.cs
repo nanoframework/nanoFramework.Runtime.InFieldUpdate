@@ -15,7 +15,7 @@ namespace IFU_SessionUpdate
     /// <remarks>
     /// The image is synthesised in RAM (see <see cref="TestImage"/>) so the sample runs without a
     /// server. A real application downloads the same bytes instead - the session calls are
-    /// identical, only the source of each chunk differs. See the repository README for the HTTP
+    /// identical, only the source of each chunk differs. See docs/update-sessions.md for the HTTP
     /// range variant.
     /// </remarks>
     public class Program
