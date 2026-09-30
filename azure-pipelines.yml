@@ -15,6 +15,7 @@ trigger:
       - NuGet.Config
       - assets/*
       - .github/*
+      - docs/*
 
 # PR always trigger build
 pr:
