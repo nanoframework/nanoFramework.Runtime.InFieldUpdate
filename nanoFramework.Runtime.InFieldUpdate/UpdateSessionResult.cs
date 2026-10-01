@@ -6,10 +6,9 @@
 namespace nanoFramework.Runtime.InFieldUpdate
 {
     /// <summary>
-    /// Outcome of an update session operation. Returned by
-    /// <see cref="UpdateManager.CompleteUpdateSession(UpdateSession)"/> and, for operations that
-    /// report failure through a <c>null</c>/<see langword="false"/> return, readable via
-    /// <see cref="UpdateManager.GetLastSessionError"/>.
+    /// Outcome of an update session operation. Every session operation on
+    /// <see cref="UpdateManager"/> returns its own result, so the reason for a failure is always
+    /// that of the caller's call, never that of another writer.
     /// </summary>
     /// <remarks>
     /// This enum is the contract between both sides of the API: the interop generator emits it into

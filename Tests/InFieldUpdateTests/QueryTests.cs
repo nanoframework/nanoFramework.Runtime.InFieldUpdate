@@ -80,7 +80,7 @@ namespace InFieldUpdateTests
         [TestMethod]
         public void GetSecondaryImageInfo_OnErasedSlot_IsNull()
         {
-            Assert.IsTrue(UpdateManager.EraseSecondaryImage(TestSlot.Image));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.EraseSecondaryImage(TestSlot.Image));
             Assert.IsNull(UpdateManager.GetSecondaryImageInfo(TestSlot.Image));
         }
 

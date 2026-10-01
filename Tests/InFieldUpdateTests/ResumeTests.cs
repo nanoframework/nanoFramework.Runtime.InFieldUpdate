@@ -31,15 +31,16 @@ namespace InFieldUpdateTests
             byte[] header = McuBootImageBuilder.GetHeaderBytes(image);
             int partial = (image.Length * 6) / 10;
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
             Assert.IsTrue(TestSlot.WriteChunks(session, image, partial));
 
             // pause: close the session but keep what was stored
-            Assert.IsTrue(UpdateManager.AbortUpdateSession(session, false));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.AbortUpdateSession(session, false));
             Assert.AreEqual((int)UpdateSessionOwner.None, (int)UpdateManager.GetUpdateSessionOwner(TestSlot.Image));
 
-            UpdateSession resumed = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, header);
+            UpdateSessionResult result = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, header, out UpdateSession resumed);
 
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)result);
             Assert.IsNotNull(resumed, "the partial image should be resumable");
             Assert.IsTrue(resumed.IsResumed);
             Assert.AreEqual(image.Length, resumed.TotalLength);
@@ -69,12 +70,13 @@ namespace InFieldUpdateTests
             byte[] header = McuBootImageBuilder.GetHeaderBytes(image);
             int partial = McuBootImageBuilder.DefaultHeaderSize + PayloadLength - 4096;
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
             Assert.IsTrue(TestSlot.WriteChunks(session, image, partial));
-            Assert.IsTrue(UpdateManager.AbortUpdateSession(session, false));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.AbortUpdateSession(session, false));
 
-            UpdateSession resumed = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, header);
+            UpdateSessionResult result = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, header, out UpdateSession resumed);
 
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)result);
             Assert.IsNotNull(resumed);
             Assert.IsTrue(resumed.NextOffset <= partial);
 
@@ -90,12 +92,13 @@ namespace InFieldUpdateTests
             byte[] image = McuBootImageBuilder.Build(4096);
             byte[] header = McuBootImageBuilder.GetHeaderBytes(image);
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
             Assert.IsTrue(TestSlot.WriteChunks(session, image, image.Length));
-            Assert.IsTrue(UpdateManager.AbortUpdateSession(session, false));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.AbortUpdateSession(session, false));
 
-            UpdateSession resumed = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, header);
+            UpdateSessionResult result = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, header, out UpdateSession resumed);
 
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)result);
             Assert.IsNotNull(resumed);
             Assert.AreEqual(image.Length, resumed.NextOffset);
             Assert.IsTrue(resumed.IsComplete);
@@ -111,12 +114,13 @@ namespace InFieldUpdateTests
             byte[] image = McuBootImageBuilder.Build(PayloadLength);
             int partial = (image.Length * 6) / 10;
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
             Assert.IsTrue(TestSlot.WriteChunks(session, image, partial));
-            Assert.IsTrue(UpdateManager.AbortUpdateSession(session, false));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.AbortUpdateSession(session, false));
 
-            UpdateSession resumed = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, null);
+            UpdateSessionResult result = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, null, out UpdateSession resumed);
 
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)result);
             Assert.IsNotNull(resumed, "the header check is optional");
             UpdateManager.AbortUpdateSession(resumed, false);
         }
@@ -129,17 +133,18 @@ namespace InFieldUpdateTests
             byte[] stored = McuBootImageBuilder.Build(8192, 1, 2, 3, 4);
             byte[] other = McuBootImageBuilder.Build(8192, 9, 9, 9, 9);
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, stored.Length);
+            UpdateSession session = TestSlot.Open(stored.Length);
             Assert.IsTrue(TestSlot.WriteChunks(session, stored, stored.Length / 2));
-            Assert.IsTrue(UpdateManager.AbortUpdateSession(session, false));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.AbortUpdateSession(session, false));
 
-            UpdateSession resumed = UpdateManager.ResumeUpdateSession(
+            UpdateSessionResult result = UpdateManager.ResumeUpdateSession(
                 TestSlot.Image,
                 stored.Length,
-                McuBootImageBuilder.GetHeaderBytes(other));
+                McuBootImageBuilder.GetHeaderBytes(other),
+                out UpdateSession resumed);
 
             Assert.IsNull(resumed, "a different image is staged");
-            Assert.AreEqual((int)UpdateSessionResult.HeaderMismatch, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual((int)UpdateSessionResult.HeaderMismatch, (int)result);
             Assert.AreEqual((int)UpdateSessionOwner.None, (int)UpdateManager.GetUpdateSessionOwner(TestSlot.Image));
         }
 
@@ -151,15 +156,15 @@ namespace InFieldUpdateTests
             byte[] image = McuBootImageBuilder.Build(8192);
             byte[] header = McuBootImageBuilder.GetHeaderBytes(image);
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
             Assert.IsTrue(TestSlot.WriteChunks(session, image, image.Length / 2));
-            Assert.IsTrue(UpdateManager.AbortUpdateSession(session, false));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.AbortUpdateSession(session, false));
 
             // the stored header describes a larger image than this total length allows
-            UpdateSession resumed = UpdateManager.ResumeUpdateSession(TestSlot.Image, 2048, header);
+            UpdateSessionResult result = UpdateManager.ResumeUpdateSession(TestSlot.Image, 2048, header, out UpdateSession resumed);
 
             Assert.IsNull(resumed);
-            Assert.AreEqual((int)UpdateSessionResult.HeaderMismatch, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual((int)UpdateSessionResult.HeaderMismatch, (int)result);
         }
 
         [TestMethod]
@@ -169,15 +174,16 @@ namespace InFieldUpdateTests
 
             byte[] image = McuBootImageBuilder.Build(4096);
 
-            Assert.IsTrue(UpdateManager.EraseSecondaryImage(TestSlot.Image));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.EraseSecondaryImage(TestSlot.Image));
 
-            UpdateSession resumed = UpdateManager.ResumeUpdateSession(
+            UpdateSessionResult result = UpdateManager.ResumeUpdateSession(
                 TestSlot.Image,
                 image.Length,
-                McuBootImageBuilder.GetHeaderBytes(image));
+                McuBootImageBuilder.GetHeaderBytes(image),
+                out UpdateSession resumed);
 
             Assert.IsNull(resumed, "there is nothing to resume");
-            Assert.AreEqual((int)UpdateSessionResult.NoImage, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual((int)UpdateSessionResult.NoImage, (int)result);
         }
 
         [TestMethod]
@@ -190,15 +196,18 @@ namespace InFieldUpdateTests
             byte[] header = McuBootImageBuilder.GetHeaderBytes(image);
             int partial = (image.Length * 6) / 10;
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
             Assert.IsTrue(TestSlot.WriteChunks(session, image, partial));
 
             // resuming without pausing first: allowed for the same owner, and the old handle dies
-            UpdateSession resumed = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, header);
+            UpdateSessionResult result = UpdateManager.ResumeUpdateSession(TestSlot.Image, image.Length, header, out UpdateSession resumed);
 
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)result);
             Assert.IsNotNull(resumed);
-            Assert.IsFalse(UpdateManager.StoreImageChunk(session, image, 0, 64), "the previous session is stale");
-            Assert.AreEqual((int)UpdateSessionResult.BadToken, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual(
+                (int)UpdateSessionResult.BadToken,
+                (int)UpdateManager.StoreImageChunk(session, image, 0, 64),
+                "the previous session is stale");
 
             UpdateManager.AbortUpdateSession(resumed, false);
         }

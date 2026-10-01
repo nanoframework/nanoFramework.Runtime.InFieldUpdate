@@ -87,9 +87,10 @@ interleave. See [Update sessions](update-sessions.md).
 |:-|:-|:-|
 | Query | `GetStatus`, `GetPrimaryImageInfo`, `GetSecondaryImageInfo`, `GetImageList`, `ImageInfo`, `ImageInfoExtensions.ToTable` | [Querying images](querying-images.md) |
 | Stage | `StartUpdateSession`, `ResumeUpdateSession`, `StoreImageChunk`, `UpdateSession.Write`, `CompleteUpdateSession`, `AbortUpdateSession`, `EraseSecondaryImage` | [Update sessions](update-sessions.md) |
-| Diagnostics | `GetUpdateSessionOwner`, `GetLastSessionError`, `UpdateSessionResult` | [Update sessions](update-sessions.md) |
+| Diagnostics | `GetUpdateSessionOwner`, `UpdateSessionResult` (returned by every session operation) | [Update sessions](update-sessions.md) |
 | Confirm / revert | `ConfirmDeploymentImage`, `RequestDeploymentRevert`, `RequestClrRevert` | [Confirm and revert](confirm-and-revert.md) |
 | Reboot | `RequestReboot` | [Confirm and revert](confirm-and-revert.md) |
+| Provider contract (`nanoFramework.Runtime.InFieldUpdate.Provider` package) | `IUpdateProvider`, `UpdateAgentOptions`, `HealthCheck` | [Writing an update provider](writing-an-update-provider.md) |
 
 To put all of this together in a library that downloads updates from a server or other provider,
 see [Writing an update provider](writing-an-update-provider.md).

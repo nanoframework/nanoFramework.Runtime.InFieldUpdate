@@ -30,16 +30,20 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="CompleteTests.cs" />
+    <Compile Include="Helpers\FakeUpdateProvider.cs" />
     <Compile Include="Helpers\McuBootImageBuilder.cs" />
+    <Compile Include="Helpers\ReferenceAgent.cs" />
     <Compile Include="Helpers\Sha256.cs" />
     <Compile Include="Helpers\TestSlot.cs" />
     <Compile Include="ImageInfoExtensionsTests.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="ProviderFlowTests.cs" />
     <Compile Include="QueryTests.cs" />
     <Compile Include="ResumeTests.cs" />
     <Compile Include="SessionLifecycleTests.cs" />
     <Compile Include="StoreImageChunkTests.cs" />
     <Compile Include="ThreadingTests.cs" />
+    <Compile Include="UpdateAgentOptionsTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib">
@@ -54,6 +58,7 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\nanoFramework.Runtime.InFieldUpdate\nanoFramework.Runtime.InFieldUpdate.nfproj" />
+    <ProjectReference Include="..\..\nanoFramework.Runtime.InFieldUpdate.Provider\nanoFramework.Runtime.InFieldUpdate.Provider.nfproj" />
   </ItemGroup>
   <ItemGroup>
     <None Include="nano.runsettings" />

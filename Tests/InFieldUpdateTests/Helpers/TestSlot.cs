@@ -4,6 +4,7 @@
 //
 
 using nanoFramework.Runtime.InFieldUpdate;
+using nanoFramework.TestFramework;
 
 namespace InFieldUpdateTests.Helpers
 {
@@ -29,9 +30,7 @@ namespace InFieldUpdateTests.Helpers
             {
                 // reopening as the same owner replaces the abandoned session; aborting it with an
                 // erase then leaves the slot clean
-                UpdateSession session = UpdateManager.StartUpdateSession(Image, 1024);
-
-                if (session != null)
+                if (UpdateManager.StartUpdateSession(Image, 1024, out UpdateSession session) == UpdateSessionResult.Success)
                 {
                     UpdateManager.AbortUpdateSession(session, true);
                     return;
@@ -39,6 +38,22 @@ namespace InFieldUpdateTests.Helpers
             }
 
             UpdateManager.EraseSecondaryImage(Image);
+        }
+
+        /// <summary>
+        /// Opens a fresh session for <paramref name="totalLength"/> bytes, failing the test if it
+        /// cannot be opened.
+        /// </summary>
+        public static UpdateSession Open(int totalLength)
+        {
+            Assert.AreEqual(
+                (int)UpdateSessionResult.Success,
+                (int)UpdateManager.StartUpdateSession(Image, totalLength, out UpdateSession session),
+                "session should open");
+
+            Assert.IsNotNull(session);
+
+            return session;
         }
 
         /// <summary>
@@ -82,7 +97,7 @@ namespace InFieldUpdateTests.Helpers
                     count = chunkSize;
                 }
 
-                if (!UpdateManager.StoreImageChunk(session, image, position, count))
+                if (UpdateManager.StoreImageChunk(session, image, position, count) != UpdateSessionResult.Success)
                 {
                     return false;
                 }

@@ -48,12 +48,27 @@ variables:
 steps:
 
 # step from template @ nf-tools repo
-# all build, update and publish steps
-- template: azure-pipelines-templates/class-lib-build.yml@templates
+# build steps only
+- template: azure-pipelines-templates/class-lib-build-only.yml@templates
   parameters:
     sonarCloudProject: 'nanoframework_nanoFramework.Runtime.InFieldUpdate'
     runUnitTests: false
     usePreviewBuild: true
+
+# package steps
+- template: azure-pipelines-templates/class-lib-package.yml@templates
+  parameters:
+    nugetPackageName: 'nanoFramework.Runtime.InFieldUpdate'
+
+- template: azure-pipelines-templates/class-lib-package.yml@templates
+  parameters:
+    nugetPackageName: 'nanoFramework.Runtime.InFieldUpdate.Provider'
+
+- template: azure-pipelines-templates/class-lib-publish.yml@templates
+
+# step from template @ nf-tools repo
+# create GitHub release for the main package
+- template: azure-pipelines-templates/create-github-release.yml@templates
 
 # step from template @ nf-tools repo
 # report error

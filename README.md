@@ -13,6 +13,7 @@ This repository contains the nanoFramework.Runtime.InFieldUpdate class library.
 | Component | Build Status | NuGet Package |
 |:-|---|---|
 | nanoFramework.Runtime.InFieldUpdate | [![Build Status](https://dev.azure.com/nanoframework/nanoFramework.Runtime.InFieldUpdate/_apis/build/status%2FnanoFramework.Runtime.InFieldUpdate?repoName=nanoframework%2FnanoFramework.Runtime.InFieldUpdate&branchName=main)](https://dev.azure.com/nanoframework/nanoFramework.Runtime.InFieldUpdate/_build/latest?definitionId=130&repoName=nanoframework%2FnanoFramework.Runtime.InFieldUpdate&branchName=main) | [![NuGet](https://img.shields.io/nuget/v/nanoFramework.Runtime.InFieldUpdate.svg?label=NuGet&style=flat&logo=nuget)](https://www.nuget.org/packages/nanoFramework.Runtime.InFieldUpdate/) |
+| nanoFramework.Runtime.InFieldUpdate.Provider | [![Build Status](https://dev.azure.com/nanoframework/nanoFramework.Runtime.InFieldUpdate/_apis/build/status%2FnanoFramework.Runtime.InFieldUpdate?repoName=nanoframework%2FnanoFramework.Runtime.InFieldUpdate&branchName=main)](https://dev.azure.com/nanoframework/nanoFramework.Runtime.InFieldUpdate/_build/latest?definitionId=130&repoName=nanoframework%2FnanoFramework.Runtime.InFieldUpdate&branchName=main) | [![NuGet](https://img.shields.io/nuget/v/nanoFramework.Runtime.InFieldUpdate.Provider.svg?label=NuGet&style=flat&logo=nuget)](https://www.nuget.org/packages/nanoFramework.Runtime.InFieldUpdate.Provider/) |
 
 ## What is In-Field Update
 
@@ -30,15 +31,23 @@ the next reboot MCUboot swaps the new image in as a **test** image; if the new a
 confirm itself, the previous image is restored on the following reboot.
 
 This library is the managed API to that mechanism: query the images on the device, stage a new one
-through an update session (with resume after interruptions), confirm or revert, and reboot.
+through an update session (with resume after interruptions), confirm or revert, and reboot. Every
+session operation returns an `UpdateSessionResult` saying exactly what happened.
 
 ```csharp
 // stage a new deployment image, chunk by chunk, as it arrives from the provider
-UpdateSession session = UpdateManager.StartUpdateSession(ImageType.Deployment, totalLength);
+if (UpdateManager.StartUpdateSession(ImageType.Deployment, totalLength, out UpdateSession session)
+    != UpdateSessionResult.Success)
+{
+    return;
+}
 
 while (!session.IsComplete)
 {
-    session.Write(NextChunkFromServer());
+    if (session.Write(NextChunkFromServer()) != UpdateSessionResult.Success)
+    {
+        return;
+    }
 }
 
 if (UpdateManager.CompleteUpdateSession(session) == UpdateSessionResult.Success)
@@ -60,7 +69,16 @@ UpdateManager.ConfirmDeploymentImage();
 - [Confirm and revert](docs/confirm-and-revert.md) - `ConfirmDeploymentImage`,
   `RequestDeploymentRevert`, `RequestClrRevert`, `RequestReboot` and the test cycle.
 - [Writing an update provider](docs/writing-an-update-provider.md) - how to build an update library
-  that fetches images from a server or other provider, end to end.
+  that fetches images from a server or other provider, end to end, on the `IUpdateProvider`
+  contract from the `nanoFramework.Runtime.InFieldUpdate.Provider` package.
+
+## Packages
+
+- `nanoFramework.Runtime.InFieldUpdate` - the core API above. All an application needs to stage,
+  confirm and revert images.
+- `nanoFramework.Runtime.InFieldUpdate.Provider` - the contract for update libraries:
+  `IUpdateProvider` (where images come from) and `UpdateAgentOptions` (chunk size, retry cap,
+  confirm hook). Pure managed code on top of the core package.
 
 ## Samples
 

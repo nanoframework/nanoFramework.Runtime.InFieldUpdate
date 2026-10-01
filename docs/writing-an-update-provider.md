@@ -7,6 +7,17 @@ fetches it and stages it on the device.
 
 It assumes you have read the [overview](overview.md) and [Update sessions](update-sessions.md).
 
+## Packages
+
+| Package | Contains | Who references it |
+|:-|:-|:-|
+| `nanoFramework.Runtime.InFieldUpdate` | `UpdateManager`, `UpdateSession`, confirm/revert. | Every application that updates. |
+| `nanoFramework.Runtime.InFieldUpdate.Provider` | `IUpdateProvider`, `UpdateAgentOptions`, `HealthCheck`. | Update libraries and agents. |
+
+The provider package is a contract, not an agent: it fixes the shape of a provider and of the
+settings an agent takes from the application, so that providers and agents from different
+libraries fit together. The agent itself - the decision logic below - is yours to write.
+
 ## Who does what
 
 | Your provider library | `UpdateManager` |
@@ -20,19 +31,43 @@ It assumes you have read the [overview](overview.md) and [Update sessions](updat
 The package the provider serves must be the **signed MCUboot image, byte for byte**: header,
 payload and TLV area, as produced by the build. `totalLength` is its exact size.
 
-## What the provider needs to expose
+## The provider contract
 
-Whatever the transport, the agent needs four things from it:
+```csharp
+public interface IUpdateProvider
+{
+    // false when nothing is on offer (or the provider cannot be reached)
+    bool TryGetOffer(out Version version, out int totalLength);
+
+    // reads up to buffer.Length bytes starting at 'offset';
+    // returns the number of bytes read, 0 at the end of the image, -1 on transport error
+    int Read(int offset, byte[] buffer);
+}
+```
+
+Between them, the two members give the agent the four things it needs:
 
 1. The **version** on offer (to decide whether to update).
 2. The **total length** of the signed image.
-3. The **first 32 bytes** (the MCUboot header), to recognise a paused download of the same image.
+3. The **first 32 bytes** (the MCUboot header) - `Read(0, new byte[32])` - to recognise a paused
+   download of the same image.
 4. The **bytes from a given offset** onwards, so a download can resume where it stopped.
 
 Over HTTP these map to a manifest (or a `HEAD` request with `Content-Length`), a
-`Range: bytes=0-31` request and `Range: bytes=<NextOffset>-<end>` requests. If the source cannot
-serve ranges, resuming is still possible by reading and discarding the first `NextOffset` bytes of
-the stream - wasteful, but correct.
+`Range: bytes=0-31` request and `Range: bytes=<offset>-<end>` requests. If the source cannot
+serve ranges, `Read` can still honour any offset by reading and discarding the bytes before it -
+wasteful, but correct. A `Read` may return fewer bytes than asked; the agent stores what it got and
+asks again from the new position.
+
+## Agent options
+
+`UpdateAgentOptions` carries what the application decides, not the provider:
+
+| Property | Default | Meaning |
+|:-|:-|:-|
+| `ChunkSize` | 4096 | Size of the buffer the image streams through - each `Read` and each `StoreImageChunk`. Also the RAM a download needs. |
+| `MaxRetries` | 3 | How many times to download again after the staged image fails verification, before giving up on the offer. 0 means a single attempt. |
+| `ConfirmHook` | `null` | `HealthCheck` the agent runs while the deployment image is on trial (`Testing`): `true` confirms it, `false` reverts it. `null` leaves confirmation to the application. |
 
 ## The flow step by step
 
@@ -45,14 +80,20 @@ agent must never start a new download while the running image is unconfirmed: if
 the work is wasted, and a new session would fail anyway while a swap is pending.
 
 If your library ships as a NuGet package used by other applications, decide whether confirmation is
-the application's job (usually: it knows what "healthy" means) or the library's (offer a hook, such
-as a self-test callback).
+the application's job (usually: it knows what "healthy" means) or the library's. `ConfirmHook` is
+how the application hands the library that decision: when it is set, the agent calls it and
+confirms or reverts; when it is `null`, the agent waits for the application to confirm.
 
 ### 2. Check whether an update is available
 
 Ask the provider what it has and compare it with what is running:
 
 ```csharp
+if (!provider.TryGetOffer(out Version offered, out int totalLength))
+{
+    return;
+}
+
 ImageInfo running = UpdateManager.GetPrimaryImageInfo(ImageType.Deployment);
 ```
 
@@ -69,8 +110,9 @@ if (UpdateManager.GetStatus(image) != UpdateStatus.Confirmed)
     return;
 }
 
-if (UpdateManager.GetUpdateSessionOwner(image) != UpdateSessionOwner.None
-    && UpdateManager.GetUpdateSessionOwner(image) != UpdateSessionOwner.Managed)
+UpdateSessionOwner owner = UpdateManager.GetUpdateSessionOwner(image);
+
+if (owner != UpdateSessionOwner.None && owner != UpdateSessionOwner.Managed)
 {
     // a host (WireProtocol) or native agent is writing right now - try again later
     return;
@@ -80,28 +122,26 @@ if (UpdateManager.GetUpdateSessionOwner(image) != UpdateSessionOwner.None
 A session owned by `Managed` can be taken over: reopening as the same writer replaces the previous
 session.
 
-### 4. Fetch the length and header
+### 4. Fetch the header
 
-Get `totalLength` and the first 32 bytes of the image from the provider. These are cheap and let
-the agent resume safely.
+Read the first 32 bytes of the image from the provider. This is cheap and lets the agent resume
+safely.
 
 ### 5. Resume first, start fresh otherwise
 
 ```csharp
-UpdateSession session = UpdateManager.ResumeUpdateSession(image, totalLength, header);
+UpdateSessionResult result = UpdateManager.ResumeUpdateSession(image, totalLength, header, out UpdateSession session);
 
-if (session == null)
+if (result == UpdateSessionResult.NoImage || result == UpdateSessionResult.HeaderMismatch)
 {
-    UpdateSessionResult why = UpdateManager.GetLastSessionError();
-
-    if (why != UpdateSessionResult.NoImage && why != UpdateSessionResult.HeaderMismatch)
-    {
-        // Busy, SwapInFlight, TooLarge, FlashError: not something a fresh start will fix
-        return;
-    }
-
     // nothing useful in the slot: start over (erases the whole slot)
-    session = UpdateManager.StartUpdateSession(image, totalLength);
+    result = UpdateManager.StartUpdateSession(image, totalLength, out session);
+}
+
+if (result != UpdateSessionResult.Success)
+{
+    // Busy, SwapInFlight, TooLarge, NoSlot, FlashError: not something a fresh start will fix
+    return;
 }
 ```
 
@@ -111,14 +151,14 @@ only find out at the end, with a `HashMismatch`.
 
 ### 6. Download the rest
 
-Fetch from `session.NextOffset` and append until `session.IsComplete`:
+Read from `session.NextOffset` and append until `session.IsComplete`:
 
-- If a chunk is rejected, the position did not advance - the same chunk can be retried. Check
-  `GetLastSessionError()`: `BadToken` means the session is gone (resume again); `TooLarge` or
-  `BadMagic` mean the package is wrong.
+- If a chunk is rejected, the position did not advance - the same chunk can be retried. The result
+  says why: `BadToken` means the session is gone (resume again); `TooLarge` or `BadMagic` mean the
+  package is wrong.
 - If the transport fails, **pause** with `AbortUpdateSession(session, false)`. The next attempt,
   even after a reboot, resumes from the slot.
-- Do not keep the whole image in RAM: stream it through a fixed-size buffer.
+- Do not keep the whole image in RAM: stream it through one buffer of `ChunkSize` bytes.
 - `StartUpdateSession` erases the whole slot and can take a few seconds on large external flash;
   allow for that in any timeouts of your own.
 
@@ -132,56 +172,47 @@ UpdateSessionResult result = UpdateManager.CompleteUpdateSession(session);
   needed and do it at a convenient time.
 - `Incomplete` - the session is still open; keep downloading.
 - `HashMismatch`, `BadTlv`, `BadMagic` - the data is corrupt or not the image the provider
-  advertised. The session is closed. Download again from scratch (`StartUpdateSession`), and give
-  up after a few attempts - a provider serving a broken package should not make the device loop
-  forever.
+  advertised. The session is closed. Download again from scratch (`StartUpdateSession`, not
+  resume), at most `MaxRetries` more times - a provider serving a broken package must not make the
+  device loop forever. When giving up, erase the slot so the next run does not resume the bad image.
 
 After the reboot the new image starts in `Testing` and step 1 applies.
 
 ## Skeleton
 
-The following is an **example**, not part of the library. `IUpdateSource` stands for whatever
-transport your provider uses; the rest is the complete decision logic described above.
+The following is an **example**, not part of the library: it is the complete decision logic
+described above, on the shipped contract. The same agent lives in the test project as
+[`ReferenceAgent`](../Tests/InFieldUpdateTests/Helpers/ReferenceAgent.cs), where it is run against
+a real device.
 
 ```csharp
 using System;
 using nanoFramework.Runtime.InFieldUpdate;
 
-// example abstraction over the provider - not part of nanoFramework.Runtime.InFieldUpdate
-public interface IUpdateSource
-{
-    // returns false if the provider has nothing on offer
-    bool TryGetOffer(out Version version, out int totalLength);
-
-    // reads up to buffer.Length bytes of the image starting at 'offset';
-    // returns the number of bytes read, or -1 on transport error
-    int Read(int offset, byte[] buffer);
-}
-
 public class UpdateAgent
 {
-    private const int ChunkSize = 4096;
     private const int HeaderSize = 32;
 
-    private readonly IUpdateSource _source;
+    private readonly IUpdateProvider _provider;
     private readonly ImageType _image;
+    private readonly UpdateAgentOptions _options;
 
-    public UpdateAgent(IUpdateSource source, ImageType image)
+    public UpdateAgent(IUpdateProvider provider, ImageType image, UpdateAgentOptions options)
     {
-        _source = source;
+        _provider = provider;
         _image = image;
+        _options = options ?? new UpdateAgentOptions();
     }
 
     /// <returns><see langword="true"/> when an image is staged and a reboot will apply it.</returns>
     public bool Run()
     {
-        if (UpdateManager.GetStatus(_image) != UpdateStatus.Confirmed)
+        if (!SettleRunningImage())
         {
-            // Testing: confirm/revert first; *Pending: a swap is already scheduled
             return false;
         }
 
-        if (!_source.TryGetOffer(out Version offered, out int totalLength))
+        if (!_provider.TryGetOffer(out Version offered, out int totalLength))
         {
             return false;
         }
@@ -195,73 +226,98 @@ public class UpdateAgent
 
         byte[] header = new byte[HeaderSize];
 
-        if (_source.Read(0, header) != HeaderSize)
+        if (_provider.Read(0, header) != HeaderSize)
         {
             return false;
         }
 
-        UpdateSession session = OpenSession(totalLength, header);
+        byte[] buffer = new byte[_options.ChunkSize];
 
-        if (session == null)
+        for (int attempt = 0; attempt <= _options.MaxRetries; attempt++)
         {
-            return false;
+            // resume only on the first attempt: after a verification failure the slot holds the
+            // bad image, which must be erased rather than continued
+            UpdateSession session;
+            UpdateSessionResult result = attempt == 0
+                ? OpenSession(totalLength, header, out session)
+                : UpdateManager.StartUpdateSession(_image, totalLength, out session);
+
+            if (result != UpdateSessionResult.Success)
+            {
+                // Busy, SwapInFlight, TooLarge, NoSlot, FlashError
+                return false;
+            }
+
+            if (!Download(session, buffer))
+            {
+                // pause: the next Run() - even after a reboot - continues from here
+                UpdateManager.AbortUpdateSession(session, false);
+                return false;
+            }
+
+            if (UpdateManager.CompleteUpdateSession(session) == UpdateSessionResult.Success)
+            {
+                return true;
+            }
+
+            // HashMismatch / BadTlv / BadMagic: not the advertised image - download again
         }
 
-        if (!Download(session))
-        {
-            // pause: the next Run() - even after a reboot - continues from here
-            UpdateManager.AbortUpdateSession(session, false);
-            return false;
-        }
-
-        UpdateSessionResult result = UpdateManager.CompleteUpdateSession(session);
-
-        if (result != UpdateSessionResult.Success)
-        {
-            // HashMismatch / BadTlv / BadMagic: the staged data is not the advertised image.
-            // Discard it so the next Run() starts from scratch rather than resuming it.
-            UpdateManager.EraseSecondaryImage(_image);
-            return false;
-        }
-
-        return true;
+        // give up, and make sure the next Run() does not resume the bad image
+        UpdateManager.EraseSecondaryImage(_image);
+        return false;
     }
 
-    private UpdateSession OpenSession(int totalLength, byte[] header)
+    private bool SettleRunningImage()
     {
-        UpdateSession session = UpdateManager.ResumeUpdateSession(_image, totalLength, header);
+        UpdateStatus status = UpdateManager.GetStatus(_image);
 
-        if (session != null)
+        if (status == UpdateStatus.Confirmed)
         {
-            return session;
+            return true;
         }
 
-        UpdateSessionResult why = UpdateManager.GetLastSessionError();
-
-        if (why != UpdateSessionResult.NoImage && why != UpdateSessionResult.HeaderMismatch)
+        if (status != UpdateStatus.Testing || _options.ConfirmHook == null)
         {
-            // Busy, SwapInFlight, TooLarge, FlashError
-            return null;
+            // a swap is pending, or confirming is the application's job
+            return false;
+        }
+
+        if (_options.ConfirmHook())
+        {
+            return UpdateManager.ConfirmDeploymentImage();
+        }
+
+        UpdateManager.RequestDeploymentRevert();
+        return false;
+    }
+
+    private UpdateSessionResult OpenSession(int totalLength, byte[] header, out UpdateSession session)
+    {
+        UpdateSessionResult result = UpdateManager.ResumeUpdateSession(_image, totalLength, header, out session);
+
+        if (result != UpdateSessionResult.NoImage && result != UpdateSessionResult.HeaderMismatch)
+        {
+            // resumed, or a failure a fresh start would not fix
+            return result;
         }
 
         // erases the whole secondary slot, which can take a few seconds
-        return UpdateManager.StartUpdateSession(_image, totalLength);
+        return UpdateManager.StartUpdateSession(_image, totalLength, out session);
     }
 
-    private bool Download(UpdateSession session)
+    private bool Download(UpdateSession session, byte[] buffer)
     {
-        byte[] buffer = new byte[ChunkSize];
-
         while (!session.IsComplete)
         {
-            int read = _source.Read(session.NextOffset, buffer);
+            int read = _provider.Read(session.NextOffset, buffer);
 
             if (read <= 0)
             {
                 return false;
             }
 
-            if (!UpdateManager.StoreImageChunk(session, buffer, 0, read))
+            if (UpdateManager.StoreImageChunk(session, buffer, 0, read) != UpdateSessionResult.Success)
             {
                 // position did not advance; a caller could retry - here we pause
                 return false;
@@ -284,11 +340,32 @@ public class UpdateAgent
 Typical use:
 
 ```csharp
-if (new UpdateAgent(new MyHttpSource(manifestUrl), ImageType.Deployment).Run())
+UpdateAgentOptions options = new UpdateAgentOptions
+{
+    ChunkSize = 2048,
+    MaxRetries = 2,
+    ConfirmHook = () => SensorsRespond() && CanReach(manifestUrl),
+};
+
+if (new UpdateAgent(new MyHttpProvider(manifestUrl), ImageType.Deployment, options).Run())
 {
     UpdateManager.RequestReboot();
 }
 ```
+
+## Testing an agent
+
+Test the agent against the real `UpdateManager` on a device, with a fake provider in place of the
+transport. An `IUpdateProvider` that serves an image built in RAM and can inject faults (drop the
+connection at a given offset, flip a byte, offer nothing) covers resume, retry cap and
+header-mismatch paths without a server. The test project's
+[`FakeUpdateProvider`](../Tests/InFieldUpdateTests/Helpers/FakeUpdateProvider.cs) and
+[`ProviderFlowTests`](../Tests/InFieldUpdateTests/ProviderFlowTests.cs) show how; the images come
+from [`McuBootImageBuilder`](../Tests/InFieldUpdateTests/Helpers/McuBootImageBuilder.cs), which
+builds unsigned images that pass `CompleteUpdateSession` verification.
+
+The IFU native code only exists on MCUboot-enabled targets, so these tests need hardware - the
+Windows nanoCLR cannot run them.
 
 ## Pitfalls checklist
 
@@ -296,8 +373,8 @@ if (new UpdateAgent(new MyHttpSource(manifestUrl), ImageType.Deployment).Run())
   the slot after a swap looks like a paused download.
 - **Session handles do not survive a reboot or a CLR restart.** Keep nothing but what you can
   recompute (URL, version, length) and resume from the slot.
-- **Read `GetLastSessionError()` immediately** after the failing call. It is one value for the
-  whole device and other writers update it too.
+- **Act on the result of each call.** Every session operation returns its own
+  `UpdateSessionResult`; the `out` session is `null` unless the result is `Success`.
 - **Serve the signed image unchanged.** Any transformation breaks the SHA-256 check at
   `CompleteUpdateSession` or the signature check at boot.
 - **Check the status before downloading.** A swap already pending (`SwapInFlight`) or an
@@ -305,8 +382,8 @@ if (new UpdateAgent(new MyHttpSource(manifestUrl), ImageType.Deployment).Run())
 - **Make sure the new image can confirm itself** - and can still reach your provider. An image
   that never confirms is rolled back on every reboot; an image that confirms but cannot update is
   stuck in the field.
-- **Cap retries** after `HashMismatch`/`BadTlv`, so a broken package on the server does not keep
-  the device downloading forever.
+- **Cap retries** after `HashMismatch`/`BadTlv` with `MaxRetries`, and start retries fresh rather
+  than resuming, so a broken package on the server does not keep the device downloading forever.
 - **Be careful with `ImageType.NanoClr`.** Test the whole flow with deployment images first; the
   nanoCLR is confirmed at startup and has no automatic test-and-revert cycle (see
   [nanoCLR image](confirm-and-revert.md#nanoclr-image)).

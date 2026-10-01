@@ -9,8 +9,8 @@ namespace nanoFramework.Runtime.InFieldUpdate
 {
     /// <summary>
     /// Handle to an open update session: the right to stage an image into the secondary slot of
-    /// <see cref="Image"/>. Obtained from <see cref="UpdateManager.StartUpdateSession(ImageType, int)"/>
-    /// or <see cref="UpdateManager.ResumeUpdateSession(ImageType, int, byte[])"/>.
+    /// <see cref="Image"/>. Obtained from <see cref="UpdateManager.StartUpdateSession(ImageType, int, out UpdateSession)"/>
+    /// or <see cref="UpdateManager.ResumeUpdateSession(ImageType, int, byte[], out UpdateSession)"/>.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -29,7 +29,7 @@ namespace nanoFramework.Runtime.InFieldUpdate
     /// <para>
     /// The handle does not outlive a reboot - the runtime releases every session when the CLR stops,
     /// so nothing stays claimed by an application that is gone. The bytes already staged in the slot
-    /// do survive: <see cref="UpdateManager.ResumeUpdateSession(ImageType, int, byte[])"/> hands back
+    /// do survive: <see cref="UpdateManager.ResumeUpdateSession(ImageType, int, byte[], out UpdateSession)"/> hands back
     /// a new session positioned where the previous one stopped.
     /// </para>
     /// </remarks>
@@ -60,7 +60,7 @@ namespace nanoFramework.Runtime.InFieldUpdate
 
         /// <summary>
         /// Gets a value indicating whether the session was reopened on a partially stored image
-        /// (<see cref="UpdateManager.ResumeUpdateSession(ImageType, int, byte[])"/>) rather than
+        /// (<see cref="UpdateManager.ResumeUpdateSession(ImageType, int, byte[], out UpdateSession)"/>) rather than
         /// started fresh.
         /// </summary>
         public bool IsResumed { get; }
@@ -92,14 +92,13 @@ namespace nanoFramework.Runtime.InFieldUpdate
         /// Equivalent to <c>UpdateManager.StoreImageChunk(this, data, 0, data.Length)</c>.
         /// </summary>
         /// <param name="data">Bytes to append.</param>
-        /// <returns><see langword="true"/> if the chunk was written; otherwise, <see langword="false"/>.</returns>
+        /// <returns>
+        /// The outcome, as for <see cref="UpdateManager.StoreImageChunk(UpdateSession, byte[], int, int)"/>.
+        /// </returns>
         /// <exception cref="ArgumentNullException"><paramref name="data"/> is <see langword="null"/>.</exception>
-        public bool Write(byte[] data)
+        public UpdateSessionResult Write(byte[] data)
         {
-            if (data == null)
-            {
-                throw new ArgumentNullException();
-            }
+            ArgumentNullException.ThrowIfNull(data);
 
             return UpdateManager.StoreImageChunk(this, data, 0, data.Length);
         }

@@ -25,20 +25,20 @@ namespace InFieldUpdateTests
             TestSlot.EnsureNoPendingSwap();
 
             byte[] image = McuBootImageBuilder.Build(4096);
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
-            bool wroteFromOtherThread = false;
+            UpdateSession session = TestSlot.Open(image.Length);
+            UpdateSessionResult result = UpdateSessionResult.BadArgument;
 
             // the token gates writes, so a session may legitimately be handed to another thread -
             // what it must not do is let two writers interleave, which the registry prevents
             Thread worker = new Thread(() =>
             {
-                wroteFromOtherThread = UpdateManager.StoreImageChunk(session, image, 0, 1024);
+                result = UpdateManager.StoreImageChunk(session, image, 0, 1024);
             });
 
             worker.Start();
             worker.Join();
 
-            Assert.IsTrue(wroteFromOtherThread, "a session works from whichever thread holds it");
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)result, "a session works from whichever thread holds it");
             Assert.AreEqual(1024, session.NextOffset);
 
             UpdateManager.AbortUpdateSession(session, false);
@@ -49,21 +49,18 @@ namespace InFieldUpdateTests
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
-            bool erased = true;
-            UpdateSessionResult error = UpdateSessionResult.Success;
+            UpdateSession session = TestSlot.Open(4096);
+            UpdateSessionResult result = UpdateSessionResult.Success;
 
             Thread worker = new Thread(() =>
             {
-                erased = UpdateManager.EraseSecondaryImage(TestSlot.Image);
-                error = UpdateManager.GetLastSessionError();
+                result = UpdateManager.EraseSecondaryImage(TestSlot.Image);
             });
 
             worker.Start();
             worker.Join();
 
-            Assert.IsFalse(erased, "the slot is claimed by an open session");
-            Assert.AreEqual((int)UpdateSessionResult.Busy, (int)error);
+            Assert.AreEqual((int)UpdateSessionResult.Busy, (int)result, "the slot is claimed by an open session");
 
             UpdateManager.AbortUpdateSession(session, false);
         }
@@ -74,17 +71,19 @@ namespace InFieldUpdateTests
             TestSlot.EnsureNoPendingSwap();
 
             byte[] image = McuBootImageBuilder.Build(4096);
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
 
-            Assert.IsTrue(UpdateManager.StoreImageChunk(session, image, 0, 1024));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.StoreImageChunk(session, image, 0, 1024));
 
             Thread worker = new Thread(() => UpdateManager.AbortUpdateSession(session, false));
 
             worker.Start();
             worker.Join();
 
-            Assert.IsFalse(UpdateManager.StoreImageChunk(session, image, 1024, 1024), "the session was closed");
-            Assert.AreEqual((int)UpdateSessionResult.BadToken, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual(
+                (int)UpdateSessionResult.BadToken,
+                (int)UpdateManager.StoreImageChunk(session, image, 1024, 1024),
+                "the session was closed");
         }
     }
 }

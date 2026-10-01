@@ -28,12 +28,12 @@ slot", which is exactly what `ResumeUpdateSession` looks for.
 
 ```csharp
 // total length is the size of the signed package (content length of the download)
-UpdateSession session = UpdateManager.StartUpdateSession(ImageType.Deployment, totalLength);
+UpdateSessionResult result = UpdateManager.StartUpdateSession(ImageType.Deployment, totalLength, out UpdateSession session);
 
-if (session == null)
+if (result != UpdateSessionResult.Success)
 {
-    // Busy, SwapInFlight, TooLarge, FlashError - see UpdateSessionResult
-    Debug.WriteLine($"could not start: {UpdateManager.GetLastSessionError()}");
+    // Busy, SwapInFlight, TooLarge, NoSlot, FlashError - see UpdateSessionResult
+    Debug.WriteLine($"could not start: {result}");
     return;
 }
 
@@ -42,7 +42,9 @@ while (!session.IsComplete)
 {
     int read = ReadNextChunk(buffer);
 
-    if (!UpdateManager.StoreImageChunk(session, buffer, 0, read))
+    result = UpdateManager.StoreImageChunk(session, buffer, 0, read);
+
+    if (result != UpdateSessionResult.Success)
     {
         // the position did not advance, so the chunk can be retried
         break;
@@ -67,20 +69,34 @@ build: 32-byte header, payload and TLV area. Do not strip, decompress or re-enco
 chunk of a fresh session must hold at least the whole 32-byte header, and the SHA-256 in the TLV
 area is checked by `CompleteUpdateSession` against what was written.
 
+### Results, not error state
+
+Every session operation - `StartUpdateSession`, `ResumeUpdateSession`, `StoreImageChunk`,
+`UpdateSession.Write`, `CompleteUpdateSession`, `AbortUpdateSession` and `EraseSecondaryImage` -
+returns an [`UpdateSessionResult`](#updatesessionresult-reference). The result is that of *your*
+call: there is no device-wide "last error" to read afterwards, so another writer (a host uploading
+over the Wire Protocol, say) can never overwrite the reason before you look at it. The two calls
+that open a session hand it back through an `out` parameter, which is `null` unless the result is
+`Success`.
+
 ### `StartUpdateSession`
+
+```csharp
+UpdateSessionResult result = UpdateManager.StartUpdateSession(image, totalLength, out UpdateSession session);
+```
 
 - Claims the image and **erases the whole secondary slot** before returning. That can take a few
   seconds on large external flash; the call blocks until the erase is done.
-- Returns `null` on failure; `GetLastSessionError()` says why: `Busy` (another writer holds a
-  session), `SwapInFlight` (a swap is already scheduled), `TooLarge` (the image does not fit the
-  slot), `FlashError` (the erase failed).
+- Fails with `Busy` (another writer holds a session), `SwapInFlight` (a swap is already
+  scheduled), `TooLarge` (the image does not fit the slot), `NoSlot` (the image has no secondary
+  slot on this target) or `FlashError` (the erase failed).
 - Throws `ArgumentOutOfRangeException` if `totalLength` is not positive.
 
 ### `StoreImageChunk` and `UpdateSession.Write`
 
 ```csharp
-bool ok = UpdateManager.StoreImageChunk(session, buffer, offset, count);
-bool ok = session.Write(chunk); // same as StoreImageChunk(session, chunk, 0, chunk.Length)
+UpdateSessionResult result = UpdateManager.StoreImageChunk(session, buffer, offset, count);
+UpdateSessionResult result = session.Write(chunk); // same as StoreImageChunk(session, chunk, 0, chunk.Length)
 ```
 
 - `offset` and `count` index into **the buffer**, as for `Stream.Write`. The position in the image
@@ -116,8 +132,9 @@ UpdateManager.AbortUpdateSession(session, eraseSlot: true);  // discard
 - `eraseSlot: false` is a **pause**: the session is released but what was stored stays in the slot
   for a later `ResumeUpdateSession`.
 - `eraseSlot: true` discards the partial image. The session is released even if the erase fails,
-  so there is nothing to retry; the return value tells you whether the slot is actually clean. If it
-  is not, call `EraseSecondaryImage` or just start a new session later (which erases anyway).
+  so there is nothing to retry; a `FlashError` result tells you the slot is not actually clean.
+  In that case call `EraseSecondaryImage` or just start a new session later (which erases anyway).
+- `BadToken` means the session was already closed (or was never this writer's).
 
 ## Resuming an interrupted download
 
@@ -130,16 +147,26 @@ Nothing is persisted for this: the secondary slot itself carries the state, and
 // from whatever else might be sitting in the slot
 byte[] expectedHeader = HttpRange(url, 0, 31);
 
-UpdateSession session =
-    UpdateManager.ResumeUpdateSession(ImageType.Deployment, totalLength, expectedHeader)
-    ?? UpdateManager.StartUpdateSession(ImageType.Deployment, totalLength);
+UpdateSessionResult result =
+    UpdateManager.ResumeUpdateSession(ImageType.Deployment, totalLength, expectedHeader, out UpdateSession session);
 
-while (session != null && !session.IsComplete)
+if (result == UpdateSessionResult.NoImage || result == UpdateSessionResult.HeaderMismatch)
+{
+    // nothing useful in the slot: start over
+    result = UpdateManager.StartUpdateSession(ImageType.Deployment, totalLength, out session);
+}
+
+if (result != UpdateSessionResult.Success)
+{
+    return;
+}
+
+while (!session.IsComplete)
 {
     // ask the server only for what is missing
     byte[] chunk = HttpRange(url, session.NextOffset, session.NextOffset + ChunkSize - 1);
 
-    if (!UpdateManager.StoreImageChunk(session, chunk, 0, chunk.Length))
+    if (UpdateManager.StoreImageChunk(session, chunk, 0, chunk.Length) != UpdateSessionResult.Success)
     {
         // pause instead of discarding: the next run resumes from here
         UpdateManager.AbortUpdateSession(session, false);
@@ -159,12 +186,13 @@ Passing `expectedHeader` matters. After a completed swap the secondary slot hold
 paused download. Without the check, `ResumeUpdateSession` would happily resume the wrong image
 (`CompleteUpdateSession` would then fail with `HashMismatch`, but only after the whole transfer).
 
-When `ResumeUpdateSession` returns `null`, `GetLastSessionError()` says why:
+When `ResumeUpdateSession` does not return `Success`, the result says why:
 
 - `NoImage` - slot erased or too little stored. Start a fresh session.
 - `HeaderMismatch` - the slot holds a different image (or a different `totalLength`). Start a fresh
   session.
-- `Busy`, `SwapInFlight`, `TooLarge`, `FlashError` - as for `StartUpdateSession`.
+- `Busy`, `SwapInFlight`, `TooLarge`, `NoSlot`, `FlashError` - as for `StartUpdateSession`; a fresh
+  session would fail too.
 
 The [IFU_SessionUpdate sample](../Samples/IFU_SessionUpdate/Program.cs) walks through start,
 pause, resume and complete with an image synthesised in RAM.
@@ -200,23 +228,22 @@ The handle may be handed to another thread, but must never be used by two writer
   stale: further use returns `UpdateSessionResult.BadToken`.
 - `AbortUpdateSession(session, eraseSlot: false)` is a pause - what was stored stays for a later
   `ResumeUpdateSession`. With `eraseSlot: true` the session is released even if the erase fails,
-  so there is nothing to retry; the return value tells you whether the slot is actually clean.
+  so there is nothing to retry; the result tells you whether the slot is actually clean.
 - Sessions live in RAM and every reboot releases them, a CLR-only restart (a deploy from Visual
   Studio, `RequestReboot`) included. A device can therefore never come back with a slot claimed by
   an application that is gone. What was already written to the slot is untouched, which is exactly
   what `ResumeUpdateSession` picks up.
-- `GetLastSessionError()` reports the last outcome the runtime recorded for *any* writer, so read
-  it right after the call you are interested in.
 
 ## `EraseSecondaryImage`
 
 ```csharp
-bool erased = UpdateManager.EraseSecondaryImage(ImageType.Deployment);
+UpdateSessionResult result = UpdateManager.EraseSecondaryImage(ImageType.Deployment);
 ```
 
 Erases the whole secondary slot of an image. **Destructive** - whatever was staged there is lost.
 Use it only to deliberately discard a staged or partial image; `StartUpdateSession` already erases
-the slot itself. Fails while any writer holds a session on the image.
+the slot itself. Fails with `Busy` while any writer holds a session on the image, `NoSlot` when the
+image has no secondary slot, `FlashError` when the erase failed.
 
 ## `UpdateSessionResult` reference
 

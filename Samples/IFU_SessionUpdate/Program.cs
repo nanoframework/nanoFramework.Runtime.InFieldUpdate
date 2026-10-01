@@ -59,11 +59,11 @@ namespace IFU_SessionUpdate
         /// </summary>
         private static bool StageWithInterruption(byte[] image)
         {
-            UpdateSession session = UpdateManager.StartUpdateSession(Image, image.Length);
+            UpdateSessionResult result = UpdateManager.StartUpdateSession(Image, image.Length, out UpdateSession session);
 
-            if (session == null)
+            if (result != UpdateSessionResult.Success)
             {
-                Console.WriteLine($"could not start a session: {UpdateManager.GetLastSessionError()}");
+                Console.WriteLine($"could not start a session: {result}");
                 return false;
             }
 
@@ -83,12 +83,12 @@ namespace IFU_SessionUpdate
             // needs is the image length and the first 32 bytes of the image it is downloading.
             byte[] expectedHeader = TestImage.GetHeaderBytes(image);
 
-            session = UpdateManager.ResumeUpdateSession(Image, image.Length, expectedHeader);
+            result = UpdateManager.ResumeUpdateSession(Image, image.Length, expectedHeader, out session);
 
-            if (session == null)
+            if (result != UpdateSessionResult.Success)
             {
                 // NoImage or HeaderMismatch mean "nothing useful is staged" - start over
-                Console.WriteLine($"could not resume: {UpdateManager.GetLastSessionError()}");
+                Console.WriteLine($"could not resume: {result}");
                 return false;
             }
 
@@ -99,7 +99,7 @@ namespace IFU_SessionUpdate
                 return false;
             }
 
-            UpdateSessionResult result = UpdateManager.CompleteUpdateSession(session);
+            result = UpdateManager.CompleteUpdateSession(session);
 
             Console.WriteLine($"complete: {result}");
 
@@ -121,9 +121,11 @@ namespace IFU_SessionUpdate
                 }
 
                 // offset/count index into the buffer; the slot position is session.NextOffset
-                if (!UpdateManager.StoreImageChunk(session, image, session.NextOffset, count))
+                UpdateSessionResult result = UpdateManager.StoreImageChunk(session, image, session.NextOffset, count);
+
+                if (result != UpdateSessionResult.Success)
                 {
-                    Console.WriteLine($"chunk rejected at {session.NextOffset}: {UpdateManager.GetLastSessionError()}");
+                    Console.WriteLine($"chunk rejected at {session.NextOffset}: {result}");
                     return false;
                 }
             }

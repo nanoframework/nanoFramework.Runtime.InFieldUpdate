@@ -24,7 +24,7 @@ namespace InFieldUpdateTests
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
+            UpdateSession session = TestSlot.Open(4096);
 
             Assert.ThrowsException(
                 typeof(ArgumentNullException),
@@ -38,7 +38,7 @@ namespace InFieldUpdateTests
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
+            UpdateSession session = TestSlot.Open(4096);
             byte[] data = new byte[64];
 
             Assert.ThrowsException(typeof(ArgumentOutOfRangeException), () => UpdateManager.StoreImageChunk(session, data, -1, 8));
@@ -50,31 +50,33 @@ namespace InFieldUpdateTests
         }
 
         [TestMethod]
-        public void StoreImageChunk_FirstChunkWithoutMagic_Fails()
+        public void StoreImageChunk_FirstChunkWithoutMagic_FailsWithBadMagic()
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
+            UpdateSession session = TestSlot.Open(4096);
             byte[] notAnImage = new byte[64];
 
-            Assert.IsFalse(UpdateManager.StoreImageChunk(session, notAnImage, 0, notAnImage.Length));
-            Assert.AreEqual((int)UpdateSessionResult.BadMagic, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual(
+                (int)UpdateSessionResult.BadMagic,
+                (int)UpdateManager.StoreImageChunk(session, notAnImage, 0, notAnImage.Length));
             Assert.AreEqual(0, session.NextOffset, "a rejected chunk must not advance the position");
 
             UpdateManager.AbortUpdateSession(session, false);
         }
 
         [TestMethod]
-        public void StoreImageChunk_FirstChunkShorterThanHeader_Fails()
+        public void StoreImageChunk_FirstChunkShorterThanHeader_FailsWithBadMagic()
         {
             TestSlot.EnsureNoPendingSwap();
 
             byte[] image = McuBootImageBuilder.Build(256);
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
 
             // fewer bytes than struct image_header, so the header cannot be validated
-            Assert.IsFalse(UpdateManager.StoreImageChunk(session, image, 0, 16));
-            Assert.AreEqual((int)UpdateSessionResult.BadMagic, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual(
+                (int)UpdateSessionResult.BadMagic,
+                (int)UpdateManager.StoreImageChunk(session, image, 0, 16));
 
             UpdateManager.AbortUpdateSession(session, false);
         }
@@ -85,9 +87,9 @@ namespace InFieldUpdateTests
             TestSlot.EnsureNoPendingSwap();
 
             byte[] image = McuBootImageBuilder.Build(1024, 2, 5, 7, 11);
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
 
-            Assert.IsTrue(UpdateManager.StoreImageChunk(session, image, 0, 512));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.StoreImageChunk(session, image, 0, 512));
             Assert.AreEqual(512, session.NextOffset);
 
             // the header arrived with the first chunk, so its members are now readable
@@ -99,7 +101,7 @@ namespace InFieldUpdateTests
             Assert.AreEqual(McuBootImageBuilder.DefaultHeaderSize, session.HeaderSize);
             Assert.AreEqual(1024, session.ImageSize);
 
-            Assert.IsTrue(UpdateManager.StoreImageChunk(session, image, 512, 512));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.StoreImageChunk(session, image, 512, 512));
             Assert.AreEqual(1024, session.NextOffset);
 
             UpdateManager.AbortUpdateSession(session, false);
@@ -111,10 +113,10 @@ namespace InFieldUpdateTests
             TestSlot.EnsureNoPendingSwap();
 
             byte[] image = McuBootImageBuilder.Build(256);
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
 
-            Assert.IsTrue(UpdateManager.StoreImageChunk(session, image, 0, 64));
-            Assert.IsTrue(UpdateManager.StoreImageChunk(session, image, 64, 0));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.StoreImageChunk(session, image, 0, 64));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.StoreImageChunk(session, image, 64, 0));
             Assert.AreEqual(64, session.NextOffset);
 
             UpdateManager.AbortUpdateSession(session, false);
@@ -126,14 +128,15 @@ namespace InFieldUpdateTests
             TestSlot.EnsureNoPendingSwap();
 
             byte[] image = McuBootImageBuilder.Build(256);
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
 
             Assert.IsTrue(TestSlot.WriteChunks(session, image, image.Length));
             Assert.IsTrue(session.IsComplete);
 
             // one byte more than declared
-            Assert.IsFalse(UpdateManager.StoreImageChunk(session, image, 0, 1));
-            Assert.AreEqual((int)UpdateSessionResult.TooLarge, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual(
+                (int)UpdateSessionResult.TooLarge,
+                (int)UpdateManager.StoreImageChunk(session, image, 0, 1));
 
             UpdateManager.AbortUpdateSession(session, false);
         }
@@ -154,7 +157,7 @@ namespace InFieldUpdateTests
                 oversized[333 + i] = image[i];
             }
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
 
             int position = 0;
 
@@ -167,7 +170,9 @@ namespace InFieldUpdateTests
                     count = 512;
                 }
 
-                Assert.IsTrue(UpdateManager.StoreImageChunk(session, oversized, 333 + position, count));
+                Assert.AreEqual(
+                    (int)UpdateSessionResult.Success,
+                    (int)UpdateManager.StoreImageChunk(session, oversized, 333 + position, count));
                 position += count;
             }
 
@@ -180,9 +185,9 @@ namespace InFieldUpdateTests
             TestSlot.EnsureNoPendingSwap();
 
             byte[] image = McuBootImageBuilder.Build(512);
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
 
-            Assert.IsTrue(session.Write(image));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)session.Write(image));
             Assert.AreEqual(image.Length, session.NextOffset);
             Assert.IsTrue(session.IsComplete);
 
@@ -195,11 +200,12 @@ namespace InFieldUpdateTests
             TestSlot.EnsureNoPendingSwap();
 
             byte[] image = McuBootImageBuilder.Build(256);
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+            UpdateSession session = TestSlot.Open(image.Length);
 
-            Assert.IsTrue(UpdateManager.AbortUpdateSession(session, false));
-            Assert.IsFalse(UpdateManager.StoreImageChunk(session, image, 0, image.Length));
-            Assert.AreEqual((int)UpdateSessionResult.BadToken, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.AbortUpdateSession(session, false));
+            Assert.AreEqual(
+                (int)UpdateSessionResult.BadToken,
+                (int)UpdateManager.StoreImageChunk(session, image, 0, image.Length));
         }
     }
 }

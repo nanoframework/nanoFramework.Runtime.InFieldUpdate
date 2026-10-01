@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>nanoFramework.Runtime.InFieldUpdate.Provider</id>
+    <version>$version$</version>
+    <title>nanoFramework.Runtime.InFieldUpdate.Provider</title>
+    <authors>nanoframework</authors>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <license type="file">LICENSE.md</license>
+    <releaseNotes>
+    </releaseNotes>
+    <readme>docs\README.md</readme>
+    <developmentDependency>false</developmentDependency>
+    <projectUrl>https://github.com/nanoframework/nanoFramework.Runtime.InFieldUpdate</projectUrl>
+    <icon>images\nf-logo.png</icon>
+    <repository type="git" url="https://github.com/nanoframework/nanoFramework.Runtime.InFieldUpdate" commit="$commit$" />
+    <copyright>Copyright (c) .NET Foundation and Contributors</copyright>
+    <description>This package includes the nanoFramework Runtime.InFieldUpdate.Provider assembly for .NET nanoFramework C# projects.
+Contract for update providers (IUpdateProvider) and agent options (UpdateAgentOptions), for libraries that fetch and stage update images with nanoFramework.Runtime.InFieldUpdate.</description>
+    <tags>nanoFramework C# csharp netmf netnf ifu update ota</tags>
+    <dependencies>
+      <group targetFramework=".NETnanoFramework1.0">
+        <dependency id="nanoFramework.CoreLibrary" version="2.0.0-preview.52" />
+        <dependency id="nanoFramework.Runtime.InFieldUpdate" version="$version$" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="README.md" target="docs\" />
+    <!-- readme -->
+    <file src="assets\readme.txt" target="" />
+    <file src="LICENSE.md" target="" />
+    <file src="assets\nf-logo.png" target="images" />
+    <file src="nanoFramework.Runtime.InFieldUpdate.Provider\bin\Release\nanoFramework.Runtime.InFieldUpdate.Provider.*" target="lib\netnano1.0" />
+  </files>
+</package>

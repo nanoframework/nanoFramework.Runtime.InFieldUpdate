@@ -24,12 +24,11 @@
 //            TestSlot.EnsureNoPendingSwap();
 
 //            byte[] image = McuBootImageBuilder.Build(4096);
-//            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+//            UpdateSession session = TestSlot.Open(image.Length);
 
 //            Assert.IsTrue(TestSlot.WriteChunks(session, image, 2048));
 
 //            Assert.AreEqual((int)UpdateSessionResult.Incomplete, (int)UpdateManager.CompleteUpdateSession(session));
-//            Assert.AreEqual((int)UpdateSessionResult.Incomplete, (int)UpdateManager.GetLastSessionError());
 //            Assert.AreEqual((int)UpdateSessionOwner.Managed, (int)UpdateManager.GetUpdateSessionOwner(TestSlot.Image));
 
 //            // the session survived, so the download can carry on
@@ -47,7 +46,7 @@
 //            // one flipped payload byte is enough: the digest in the TLV area no longer matches
 //            image[McuBootImageBuilder.DefaultHeaderSize + 100] ^= 0xFF;
 
-//            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+//            UpdateSession session = TestSlot.Open(image.Length);
 //            Assert.IsTrue(TestSlot.WriteChunks(session, image, image.Length));
 
 //            Assert.AreEqual((int)UpdateSessionResult.HashMismatch, (int)UpdateManager.CompleteUpdateSession(session));
@@ -63,7 +62,7 @@
 //            TestSlot.EnsureNoPendingSwap();
 
 //            byte[] image = McuBootImageBuilder.BuildWithBrokenTlv(4096);
-//            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+//            UpdateSession session = TestSlot.Open(image.Length);
 
 //            Assert.IsTrue(TestSlot.WriteChunks(session, image, image.Length));
 
@@ -79,7 +78,7 @@
 //            byte[] image = McuBootImageBuilder.Build(8192, 3, 4, 5, 6);
 //            byte[] expectedHash = Sha256.ComputeHash(image, 0, McuBootImageBuilder.DefaultHeaderSize + 8192);
 
-//            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+//            UpdateSession session = TestSlot.Open(image.Length);
 //            Assert.IsTrue(TestSlot.WriteChunks(session, image, image.Length));
 
 //            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.CompleteUpdateSession(session));
@@ -107,7 +106,7 @@
 //            Assert.AreEqual((int)UpdateStatus.TestPending, (int)UpdateManager.GetStatus(TestSlot.Image));
 
 //            // undo the scheduled swap so the run leaves nothing behind
-//            Assert.IsTrue(UpdateManager.EraseSecondaryImage(TestSlot.Image));
+//            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.EraseSecondaryImage(TestSlot.Image));
 //            Assert.IsNull(UpdateManager.GetSecondaryImageInfo(TestSlot.Image));
 //            Assert.AreEqual((int)UpdateStatus.Confirmed, (int)UpdateManager.GetStatus(TestSlot.Image));
 //        }
@@ -118,7 +117,7 @@
 //            TestSlot.EnsureNoPendingSwap();
 
 //            byte[] image = McuBootImageBuilder.Build(2048);
-//            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, image.Length);
+//            UpdateSession session = TestSlot.Open(image.Length);
 
 //            Assert.IsTrue(TestSlot.WriteChunks(session, image, image.Length));
 //            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.CompleteUpdateSession(session));
@@ -126,7 +125,7 @@
 //            // the handle is stale now
 //            Assert.AreEqual((int)UpdateSessionResult.BadToken, (int)UpdateManager.CompleteUpdateSession(session));
 
-//            Assert.IsTrue(UpdateManager.EraseSecondaryImage(TestSlot.Image));
+//            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.EraseSecondaryImage(TestSlot.Image));
 //        }
 //    }
 //}

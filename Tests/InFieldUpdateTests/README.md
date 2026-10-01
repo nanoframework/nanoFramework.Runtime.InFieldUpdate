@@ -24,6 +24,17 @@ has no managed SHA-256). They are unsigned, which is enough because completing a
 structure and hash only - MCUboot itself would reject an unsigned image at boot and erase the
 slot.
 
+## Provider flow
+
+`ProviderFlowTests` drive the whole update flow the way an agent does - resume or start,
+download, complete - through `Helpers/ReferenceAgent` (the skeleton from
+`docs/writing-an-update-provider.md`) and `Helpers/FakeUpdateProvider`, an `IUpdateProvider` that
+serves a test image from RAM and can drop the connection at a given offset, serve a corrupt image or
+offer nothing. They cover a full download, `ChunkSize`, pause and resume after a transport failure,
+the `MaxRetries` cap on a corrupt package, a different image left in the slot, and nothing on offer.
+
+`UpdateAgentOptionsTests` check the option defaults and validation; they need no IFU support.
+
 ## What is not covered
 
 Needs a reboot or a second writer, so it is verified by hand:
@@ -36,3 +47,7 @@ Needs a reboot or a second writer, so it is verified by hand:
   `Monitor_Image_Error_Busy`)
 - interaction with images imported from SD card or USB by the bootloader
 - `SwapInFlight`, and flash read/write failures
+- the `ConfirmHook` path of an agent: it needs the deployment image in `Testing`, which only a
+  real swap and reboot produce (stage `IFU-blink-app`, reboot, then run an agent with a hook
+  returning `true` and check the image is confirmed; repeat with `false` and check it reverts on
+  the next reboot)

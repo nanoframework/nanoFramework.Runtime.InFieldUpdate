@@ -24,8 +24,9 @@ namespace InFieldUpdateTests
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
+            UpdateSessionResult result = UpdateManager.StartUpdateSession(TestSlot.Image, 4096, out UpdateSession session);
 
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)result);
             Assert.IsNotNull(session, "session should be open");
             Assert.AreEqual((int)TestSlot.Image, (int)session.Image);
             Assert.AreEqual(4096, session.TotalLength);
@@ -46,7 +47,7 @@ namespace InFieldUpdateTests
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
+            UpdateSession session = TestSlot.Open(4096);
 
             Assert.IsNull(session.Version, "version is only known once the header has been written");
             Assert.AreEqual(0, session.HeaderSize);
@@ -56,17 +57,19 @@ namespace InFieldUpdateTests
         }
 
         [TestMethod]
-        public void StartUpdateSession_WhileOpen_FailsWithBusy()
+        public void EraseSecondaryImage_WhileSessionOpen_FailsWithBusy()
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession first = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
+            UpdateSession first = TestSlot.Open(4096);
 
             // same owner reopening replaces its own session, so simulate a second writer by
             // checking that the image reports itself claimed and the slot cannot be erased
             Assert.AreEqual((int)UpdateSessionOwner.Managed, (int)UpdateManager.GetUpdateSessionOwner(TestSlot.Image));
-            Assert.IsFalse(UpdateManager.EraseSecondaryImage(TestSlot.Image), "erase must be refused while a session is open");
-            Assert.AreEqual((int)UpdateSessionResult.Busy, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual(
+                (int)UpdateSessionResult.Busy,
+                (int)UpdateManager.EraseSecondaryImage(TestSlot.Image),
+                "erase must be refused while a session is open");
 
             UpdateManager.AbortUpdateSession(first, false);
         }
@@ -76,16 +79,18 @@ namespace InFieldUpdateTests
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession abandoned = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
-            UpdateSession replacement = UpdateManager.StartUpdateSession(TestSlot.Image, 8192);
+            UpdateSession abandoned = TestSlot.Open(4096);
+            UpdateSessionResult result = UpdateManager.StartUpdateSession(TestSlot.Image, 8192, out UpdateSession replacement);
 
-            Assert.IsNotNull(replacement, "the same owner may reopen its own session");
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)result, "the same owner may reopen its own session");
             Assert.IsTrue(abandoned.Token != replacement.Token, "a new session gets a new token");
             Assert.AreEqual(8192, replacement.TotalLength);
 
             byte[] image = McuBootImageBuilder.Build(64);
-            Assert.IsFalse(UpdateManager.StoreImageChunk(abandoned, image, 0, image.Length), "the replaced session is stale");
-            Assert.AreEqual((int)UpdateSessionResult.BadToken, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual(
+                (int)UpdateSessionResult.BadToken,
+                (int)UpdateManager.StoreImageChunk(abandoned, image, 0, image.Length),
+                "the replaced session is stale");
 
             UpdateManager.AbortUpdateSession(replacement, false);
         }
@@ -95,10 +100,10 @@ namespace InFieldUpdateTests
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, 64 * 1024 * 1024);
+            UpdateSessionResult result = UpdateManager.StartUpdateSession(TestSlot.Image, 64 * 1024 * 1024, out UpdateSession session);
 
+            Assert.AreEqual((int)UpdateSessionResult.TooLarge, (int)result);
             Assert.IsNull(session, "an image larger than the slot cannot be staged");
-            Assert.AreEqual((int)UpdateSessionResult.TooLarge, (int)UpdateManager.GetLastSessionError());
             Assert.AreEqual((int)UpdateSessionOwner.None, (int)UpdateManager.GetUpdateSessionOwner(TestSlot.Image));
         }
 
@@ -109,11 +114,11 @@ namespace InFieldUpdateTests
 
             Assert.ThrowsException(
                 typeof(ArgumentOutOfRangeException),
-                () => UpdateManager.StartUpdateSession(TestSlot.Image, 0));
+                () => UpdateManager.StartUpdateSession(TestSlot.Image, 0, out _));
 
             Assert.ThrowsException(
                 typeof(ArgumentOutOfRangeException),
-                () => UpdateManager.StartUpdateSession(TestSlot.Image, -1));
+                () => UpdateManager.StartUpdateSession(TestSlot.Image, -1, out _));
         }
 
         [TestMethod]
@@ -121,23 +126,28 @@ namespace InFieldUpdateTests
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
+            UpdateSession session = TestSlot.Open(4096);
 
-            Assert.IsTrue(UpdateManager.AbortUpdateSession(session, false));
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.AbortUpdateSession(session, false));
             Assert.AreEqual((int)UpdateSessionOwner.None, (int)UpdateManager.GetUpdateSessionOwner(TestSlot.Image));
-            Assert.IsTrue(UpdateManager.EraseSecondaryImage(TestSlot.Image), "erase works once the session is closed");
+            Assert.AreEqual(
+                (int)UpdateSessionResult.Success,
+                (int)UpdateManager.EraseSecondaryImage(TestSlot.Image),
+                "erase works once the session is closed");
         }
 
         [TestMethod]
-        public void AbortUpdateSession_OnStaleSession_Fails()
+        public void AbortUpdateSession_OnStaleSession_FailsWithBadToken()
         {
             TestSlot.EnsureNoPendingSwap();
 
-            UpdateSession session = UpdateManager.StartUpdateSession(TestSlot.Image, 4096);
+            UpdateSession session = TestSlot.Open(4096);
 
-            Assert.IsTrue(UpdateManager.AbortUpdateSession(session, false));
-            Assert.IsFalse(UpdateManager.AbortUpdateSession(session, false), "the session is already closed");
-            Assert.AreEqual((int)UpdateSessionResult.BadToken, (int)UpdateManager.GetLastSessionError());
+            Assert.AreEqual((int)UpdateSessionResult.Success, (int)UpdateManager.AbortUpdateSession(session, false));
+            Assert.AreEqual(
+                (int)UpdateSessionResult.BadToken,
+                (int)UpdateManager.AbortUpdateSession(session, false),
+                "the session is already closed");
         }
 
         [TestMethod]
