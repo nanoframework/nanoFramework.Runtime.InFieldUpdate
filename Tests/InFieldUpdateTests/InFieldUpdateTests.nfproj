@@ -25,9 +25,6 @@
     <RestoreLockedMode Condition="'$(TF_BUILD)' == 'True' or '$(ContinuousIntegrationBuild)' == 'True'">true</RestoreLockedMode>
   </PropertyGroup>
   <Import Project="$(NanoFrameworkProjectSystemPath)NFProjectSystem.props" Condition="Exists('$(NanoFrameworkProjectSystemPath)NFProjectSystem.props')" />
-  <PropertyGroup>
-    <RunSettingsFilePath>$(SolutionDir)\.runsettings</RunSettingsFilePath>
-  </PropertyGroup>
   <ItemGroup>
     <Compile Include="CompleteTests.cs" />
     <Compile Include="Helpers\FakeUpdateProvider.cs" />
@@ -61,7 +58,6 @@
     <ProjectReference Include="..\..\nanoFramework.Runtime.InFieldUpdate.Provider\nanoFramework.Runtime.InFieldUpdate.Provider.nfproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="nano.runsettings" />
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
