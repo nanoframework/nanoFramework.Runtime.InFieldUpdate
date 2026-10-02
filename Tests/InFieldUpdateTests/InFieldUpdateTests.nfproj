@@ -47,10 +47,10 @@
       <HintPath>..\..\packages\nanoFramework.CoreLibrary.2.0.0-preview.52\lib\netnano1.0\mscorlib.dll</HintPath>
     </Reference>
     <Reference Include="nanoFramework.TestFramework">
-      <HintPath>..\..\packages\nanoFramework.TestFramework.4.0.0-preview.62\lib\netnano1.0\nanoFramework.TestFramework.dll</HintPath>
+      <HintPath>..\..\packages\nanoFramework.TestFramework.4.0.0-preview.63\lib\netnano1.0\nanoFramework.TestFramework.dll</HintPath>
     </Reference>
     <Reference Include="nanoFramework.UnitTestLauncher">
-      <HintPath>..\..\packages\nanoFramework.TestFramework.4.0.0-preview.62\lib\netnano1.0\nanoFramework.UnitTestLauncher.exe</HintPath>
+      <HintPath>..\..\packages\nanoFramework.TestFramework.4.0.0-preview.63\lib\netnano1.0\nanoFramework.UnitTestLauncher.exe</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>
