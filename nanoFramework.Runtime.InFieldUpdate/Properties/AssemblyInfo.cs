@@ -14,9 +14,3 @@ using System.Runtime.InteropServices;
 [assembly: AssemblyCompany("nanoFramework Contributors")]
 [assembly: AssemblyProduct("nanoFramework.Runtime.InFieldUpdate")]
 [assembly: AssemblyCopyright("Copyright (c) .NET Foundation and Contributors")]
-
-/////////////////////////////////////////////////////////////////
-// This attribute is mandatory when building Interop libraries //
-// update this whenever the native assembly signature changes  //
-[assembly: AssemblyNativeVersion("100.0.0.3")]
-/////////////////////////////////////////////////////////////////
