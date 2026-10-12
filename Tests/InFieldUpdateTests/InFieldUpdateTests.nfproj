@@ -43,25 +43,26 @@
     <Compile Include="UpdateAgentOptionsTests.cs" />
   </ItemGroup>
   <ItemGroup>
-    <Reference Include="mscorlib">
-      <HintPath>..\..\packages\nanoFramework.CoreLibrary.2.0.0-preview.52\lib\netnano1.0\mscorlib.dll</HintPath>
-    </Reference>
-    <Reference Include="nanoFramework.TestFramework">
-      <HintPath>..\..\packages\nanoFramework.TestFramework.4.0.0-preview.63\lib\netnano1.0\nanoFramework.TestFramework.dll</HintPath>
-    </Reference>
-    <Reference Include="nanoFramework.UnitTestLauncher">
-      <HintPath>..\..\packages\nanoFramework.TestFramework.4.0.0-preview.63\lib\netnano1.0\nanoFramework.UnitTestLauncher.exe</HintPath>
-    </Reference>
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\..\nanoFramework.Runtime.InFieldUpdate\nanoFramework.Runtime.InFieldUpdate.nfproj" />
     <ProjectReference Include="..\..\nanoFramework.Runtime.InFieldUpdate.Provider\nanoFramework.Runtime.InFieldUpdate.Provider.nfproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="packages.config" />
+    <Content Include="packages.lock.json" />
   </ItemGroup>
   <ItemGroup>
-    <Content Include="packages.lock.json" />
+    <Reference Include="mscorlib">
+      <HintPath>..\..\packages\nanoFramework.CoreLibrary.2.0.0-preview.52\lib\netnano1.0\mscorlib.dll</HintPath>
+    </Reference>
+    <Reference Include="nanoFramework.TestFramework">
+      <HintPath>..\..\packages\nanoFramework.TestFramework.4.0.0-preview.64\lib\netnano1.0\nanoFramework.TestFramework.dll</HintPath>
+    </Reference>
+    <Reference Include="nanoFramework.UnitTestLauncher">
+      <HintPath>..\..\packages\nanoFramework.TestFramework.4.0.0-preview.64\lib\netnano1.0\nanoFramework.UnitTestLauncher.exe</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
   </ItemGroup>
   <Import Project="$(NanoFrameworkProjectSystemPath)NFProjectSystem.CSharp.targets" Condition="Exists('$(NanoFrameworkProjectSystemPath)NFProjectSystem.CSharp.targets')" />
   <ProjectExtensions>
