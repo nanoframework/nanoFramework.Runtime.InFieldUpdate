@@ -26,13 +26,13 @@
       <HintPath>packages\nanoFramework.CoreLibrary.2.0.0-preview.63\lib\netnano1.0\mscorlib.dll</HintPath>
     </Reference>
     <Reference Include="nanoFramework.Runtime.Events">
-      <HintPath>packages\nanoFramework.Runtime.Events.2.0.0-preview.13\lib\netnano1.0\nanoFramework.Runtime.Events.dll</HintPath>
+      <HintPath>packages\nanoFramework.Runtime.Events.2.0.0-preview.17\lib\netnano1.0\nanoFramework.Runtime.Events.dll</HintPath>
     </Reference>
     <Reference Include="nanoFramework.Runtime.InFieldUpdate">
-      <HintPath>packages\nanoFramework.Runtime.InFieldUpdate.1.0.19\lib\netnano1.0\nanoFramework.Runtime.InFieldUpdate.dll</HintPath>
+      <HintPath>packages\nanoFramework.Runtime.InFieldUpdate.1.0.22\lib\netnano1.0\nanoFramework.Runtime.InFieldUpdate.dll</HintPath>
     </Reference>
     <Reference Include="System.Device.Gpio">
-      <HintPath>packages\nanoFramework.System.Device.Gpio.2.0.0-preview.18\lib\netnano1.0\System.Device.Gpio.dll</HintPath>
+      <HintPath>packages\nanoFramework.System.Device.Gpio.2.0.0-preview.22\lib\netnano1.0\System.Device.Gpio.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>

@@ -10,14 +10,19 @@ namespace IFU_blink_app
     {
         private static GpioController s_GpioController;
 
+        /////////////////////////////////////////////////////////////////
         // revert this deployment if it isn't confirmed within 60 seconds
         [DeploymentConfirmationTimeout(60)]
+        /////////////////////////////////////////////////////////////////
         public static void Main()
         {
             Debug.WriteLine("Hello from nanoFramework!");
 
+            /////////////////////////////////////////////////////////////////
             // confirm the deployment
+            // (comment this line out to test the IFU revert and confirmation timeout features)
             UpdateManager.ConfirmDeploymentImage();
+            /////////////////////////////////////////////////////////////////
 
             s_GpioController = new GpioController();
 
