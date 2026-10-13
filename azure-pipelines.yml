@@ -16,6 +16,7 @@ trigger:
       - assets/*
       - .github/*
       - docs/*
+      - Samples/*
 
 # PR always trigger build
 pr:
