@@ -67,7 +67,8 @@ UpdateManager.ConfirmDeploymentImage();
 - [Update sessions](docs/update-sessions.md) - staging an image, resuming an interrupted download,
   session rules and result codes.
 - [Confirm and revert](docs/confirm-and-revert.md) - `ConfirmDeploymentImage`,
-  `RequestDeploymentRevert`, `RequestClrRevert`, `RequestReboot` and the test cycle.
+  `RequestDeploymentRevert`, `RequestClrRevert`, `RequestReboot`, the test cycle and the
+  `[DeploymentConfirmationTimeout]` failsafe.
 - [Writing an update provider](docs/writing-an-update-provider.md) - how to build an update library
   that fetches images from a server or other provider, end to end, on the `IUpdateProvider`
   contract from the `nanoFramework.Runtime.InFieldUpdate.Provider` package.

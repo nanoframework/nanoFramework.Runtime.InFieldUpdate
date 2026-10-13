@@ -30,7 +30,8 @@ A completed update session marks the new deployment image for a **test** swap:
      - on the next reboot the previous image is restored.
 
 This makes a bad update self-healing: an image that cannot get far enough to confirm itself is
-rolled back automatically.
+rolled back automatically. To make sure that reboot actually happens when the new application
+hangs, add a [confirmation timeout](#confirmation-timeout).
 
 ### `ConfirmDeploymentImage`
 
@@ -92,6 +93,72 @@ Things worth checking in `SelfTest`:
 
 Keep it bounded in time: until the image is confirmed, any reset brings the previous image back,
 so a self-test that never completes means the update does not stick.
+
+## Confirmation timeout
+
+"On the next reboot" needs something to cause that reboot. A new application that hangs,
+deadlocks or waits forever never confirms itself, and it never reboots either. The device stays
+stuck on the broken image until someone power-cycles it. On a device in the field that can be a
+long wait.
+
+Put `DeploymentConfirmationTimeout` on `Main` to close that gap:
+
+```csharp
+using nanoFramework.Runtime.InFieldUpdate;
+
+public class Program
+{
+    // this deployment has 2 minutes to confirm itself, otherwise it is reverted
+    [DeploymentConfirmationTimeout(120)]
+    public static void Main()
+    {
+        if (UpdateManager.GetStatus(ImageType.Deployment) == UpdateStatus.Testing && SelfTest())
+        {
+            UpdateManager.ConfirmDeploymentImage();
+        }
+
+        // normal application start
+    }
+}
+```
+
+When the deployment is running as an unconfirmed test image, the nanoCLR starts a countdown just
+before `Main` runs (static constructors are included). If `ConfirmDeploymentImage()` isn't called
+in time, the device is reset and MCUboot restores the previous deployment.
+
+- **Units**: seconds. `0`, or no attribute at all, leaves the countdown off.
+- **Only when it matters**: the countdown is only armed when the deployment is unconfirmed. Once
+  the image is confirmed, the attribute has no effect, so it is safe to leave in place.
+- **Per deployment**: the value travels with the application. Each deployment can choose its
+  own, without a firmware change.
+- **Once per power cycle**: the countdown starts once. A CLR-only reboot neither restarts nor
+  extends it.
+- **What stops it**:
+  - a successful `ConfirmDeploymentImage()`;
+  - a confirm sent by a tool over the Wire Protocol;
+  - the start of a debugger session (source-level debugging), so a developer stepping through
+    code isn't reset in the middle of it.
+
+  A failed confirm keeps the countdown running. When it is cancelled by a debugger, the image is
+  still unconfirmed, so it is reverted on the next reboot unless it gets confirmed.
+- **A deployment that can't start**: this case doesn't need the attribute. If an unconfirmed
+  deployment fails to load (corrupted assembly, mismatch with the firmware's native code) or has
+  no entry point, the nanoCLR reboots straight away so it is reverted.
+- **Platform support**: implemented for ChibiOS targets with MCUboot. On other platforms the
+  attribute is ignored.
+
+### Choosing a value
+
+The timeout has to cover the worst-case time from power-on to the `ConfirmDeploymentImage()` call:
+
+- static constructors;
+- the self-test, including waiting for the network to come up and the update server to answer;
+- any retries the self-test makes.
+
+Leave a generous margin. A timeout that is too short reverts a perfectly good update on a slow day.
+That is recoverable, because the update can be retried, but it is still wasted effort. Values in
+minutes are typical for applications that check connectivity. A few tens of seconds is enough for
+one that only checks local peripherals.
 
 ## nanoCLR image
 
