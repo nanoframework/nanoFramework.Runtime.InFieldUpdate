@@ -52,7 +52,8 @@ flowchart LR
    [confirms itself](confirm-and-revert.md).
 4. **Confirm or revert.** A confirmed image becomes permanent. An image that is not confirmed -
    because it crashed, hung, or decided it is broken - is replaced by the previous one on the next
-   reboot.
+   reboot. A [confirmation timeout](confirm-and-revert.md#confirmation-timeout) on `Main` forces
+   that reboot when the new application hangs.
 
 ## Update states
 
@@ -88,7 +89,7 @@ interleave. See [Update sessions](update-sessions.md).
 | Query | `GetStatus`, `GetPrimaryImageInfo`, `GetSecondaryImageInfo`, `GetImageList`, `ImageInfo`, `ImageInfoExtensions.ToTable` | [Querying images](querying-images.md) |
 | Stage | `StartUpdateSession`, `ResumeUpdateSession`, `StoreImageChunk`, `UpdateSession.Write`, `CompleteUpdateSession`, `AbortUpdateSession`, `EraseSecondaryImage` | [Update sessions](update-sessions.md) |
 | Diagnostics | `GetUpdateSessionOwner`, `UpdateSessionResult` (returned by every session operation) | [Update sessions](update-sessions.md) |
-| Confirm / revert | `ConfirmDeploymentImage`, `RequestDeploymentRevert`, `RequestClrRevert` | [Confirm and revert](confirm-and-revert.md) |
+| Confirm / revert | `ConfirmDeploymentImage`, `RequestDeploymentRevert`, `RequestClrRevert`, `DeploymentConfirmationTimeoutAttribute` | [Confirm and revert](confirm-and-revert.md) |
 | Reboot | `RequestReboot` | [Confirm and revert](confirm-and-revert.md) |
 | Provider contract (`nanoFramework.Runtime.InFieldUpdate.Provider` package) | `IUpdateProvider`, `UpdateAgentOptions`, `HealthCheck` | [Writing an update provider](writing-an-update-provider.md) |
 
