@@ -122,6 +122,11 @@ is verified by MCUboot at boot time.
 | `BadToken` | - | The handle is stale or foreign. |
 | `FlashError` | - | Flash failure, or MCUboot refused to mark the image pending. |
 
+`CompleteUpdateSession(session, requestUpdate: false)` verifies the image the same way but does not
+mark it pending: it waits for `RequestUpdate`, which marks both images pending in one go, all or
+nothing. Use it when a nanoCLR and a deployment must be updated together - see
+[Updating the nanoCLR and the deployment together](updating-clr-and-deployment.md).
+
 ### `AbortUpdateSession`
 
 ```csharp

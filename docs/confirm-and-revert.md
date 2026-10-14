@@ -41,7 +41,9 @@ bool confirmed = UpdateManager.ConfirmDeploymentImage();
 
 Makes the running deployment image permanent. If it is not called while the deployment is in the
 `Testing` state, the previous image is restored on the next reboot. Returns `true` if the image
-was confirmed.
+was confirmed. After the nanoCLR and the deployment were updated together, it confirms the nanoCLR
+as well, and returns `true` only when both are confirmed (see
+[Updating the nanoCLR and the deployment together](updating-clr-and-deployment.md)).
 
 ### `RequestDeploymentRevert`
 
@@ -164,6 +166,11 @@ one that only checks local peripherals.
 
 The nanoCLR image behaves differently: **the running nanoCLR is already confirmed at startup**, so
 there is no test cycle to confirm and `RequestDeploymentRevert` does not apply to it.
+
+The exception is a nanoCLR updated together with the deployment (both swapped in by the same
+reboot): it stays `Testing` until `ConfirmDeploymentImage()` confirms it along with the deployment,
+and it is reverted with the deployment otherwise. See
+[Updating the nanoCLR and the deployment together](updating-clr-and-deployment.md).
 
 ### `RequestClrRevert`
 

@@ -14,7 +14,9 @@ is exposed as static methods of `UpdateManager`.
 
 ## Images and slots
 
-There are two images, updated independently (`ImageType`):
+There are two images, updated independently (`ImageType`) - or together, when a nanoCLR and the
+deployment built for it depend on each other (see
+[Updating the nanoCLR and the deployment together](updating-clr-and-deployment.md)):
 
 | `ImageType` | What it is |
 |:-|:-|
@@ -88,6 +90,7 @@ interleave. See [Update sessions](update-sessions.md).
 |:-|:-|:-|
 | Query | `GetStatus`, `GetPrimaryImageInfo`, `GetSecondaryImageInfo`, `GetImageList`, `ImageInfo`, `ImageInfoExtensions.ToTable` | [Querying images](querying-images.md) |
 | Stage | `StartUpdateSession`, `ResumeUpdateSession`, `StoreImageChunk`, `UpdateSession.Write`, `CompleteUpdateSession`, `AbortUpdateSession`, `EraseSecondaryImage` | [Update sessions](update-sessions.md) |
+| Update both images together | `CompleteUpdateSession(session, requestUpdate: false)`, `RequestUpdate` | [Updating the nanoCLR and the deployment together](updating-clr-and-deployment.md) |
 | Diagnostics | `GetUpdateSessionOwner`, `UpdateSessionResult` (returned by every session operation) | [Update sessions](update-sessions.md) |
 | Confirm / revert | `ConfirmDeploymentImage`, `RequestDeploymentRevert`, `RequestClrRevert`, `DeploymentConfirmationTimeoutAttribute` | [Confirm and revert](confirm-and-revert.md) |
 | Reboot | `RequestReboot` | [Confirm and revert](confirm-and-revert.md) |

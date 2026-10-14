@@ -178,6 +178,15 @@ UpdateSessionResult result = UpdateManager.CompleteUpdateSession(session);
 
 After the reboot the new image starts in `Testing` and step 1 applies.
 
+### Offering a nanoCLR and a deployment that go together
+
+When an offer contains a new nanoCLR **and** a deployment that only runs on it, don't complete each
+with `CompleteUpdateSession(session)`: a reboot between the two would swap one in alone. Download
+both, complete each with `CompleteUpdateSession(session, requestUpdate: false)`, then call
+`RequestUpdate(ImageType.NanoClr, ImageType.Deployment)` before rebooting. After the reboot both are
+`Testing`, and confirming the deployment in step 1 confirms the nanoCLR too. See
+[Updating the nanoCLR and the deployment together](updating-clr-and-deployment.md).
+
 ## Skeleton
 
 The following is an **example**, not part of the library: it is the complete decision logic
