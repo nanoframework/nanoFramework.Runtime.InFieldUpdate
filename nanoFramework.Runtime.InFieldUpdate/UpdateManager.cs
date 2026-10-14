@@ -252,9 +252,87 @@ namespace nanoFramework.Runtime.InFieldUpdate
         /// <see cref="ConfirmDeploymentImage"/>; if it does not, the previous image is restored on the
         /// following reboot.
         /// </para>
+        /// <para>
+        /// Same as <see cref="CompleteUpdateSession(UpdateSession, bool)"/> with <c>requestUpdate</c>
+        /// set to <see langword="true"/>. To update the nanoCLR and the deployment together, complete
+        /// both with <c>requestUpdate</c> set to <see langword="false"/> and then call
+        /// <see cref="RequestUpdate(ImageType[])"/> instead.
+        /// </para>
+        /// </remarks>
+        public static UpdateSessionResult CompleteUpdateSession(UpdateSession session)
+        {
+            return CompleteUpdateSession(session, true);
+        }
+
+        /// <summary>
+        /// Verifies the staged image and, if it is intact, either marks it pending right away
+        /// (<paramref name="requestUpdate"/> <see langword="true"/>) or leaves it verified and waiting
+        /// for <see cref="RequestUpdate(ImageType[])"/>. Closes the session.
+        /// </summary>
+        /// <param name="session">The open session.</param>
+        /// <param name="requestUpdate">
+        /// <see langword="true"/> to mark the image pending so that MCUboot swaps it in on the next
+        /// reboot as a revertible test image; <see langword="false"/> to only verify it, when it is part
+        /// of an update of both images that must be requested together with
+        /// <see cref="RequestUpdate(ImageType[])"/>.
+        /// </param>
+        /// <returns>
+        /// <see cref="UpdateSessionResult.Success"/> when the image is verified (and, with
+        /// <paramref name="requestUpdate"/>, pending); otherwise as for
+        /// <see cref="CompleteUpdateSession(UpdateSession)"/>.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="session"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// An image completed without <paramref name="requestUpdate"/> waits in RAM: a reboot or a CLR
+        /// restart, opening a session on the image or erasing its secondary slot drop it, and
+        /// <see cref="RequestUpdate(ImageType[])"/> then reports <see cref="UpdateSessionResult.NoImage"/>.
+        /// The data stays in the slot, so after a reboot
+        /// <see cref="ResumeUpdateSession(ImageType, int, byte[], out UpdateSession)"/> finds the image
+        /// complete and this method can be called again straight away. See "Updating the nanoCLR and the
+        /// deployment together" in the documentation.
         /// </remarks>
         [MethodImpl(MethodImplOptions.InternalCall)]
-        public static extern UpdateSessionResult CompleteUpdateSession(UpdateSession session);
+        public static extern UpdateSessionResult CompleteUpdateSession(UpdateSession session, bool requestUpdate);
+
+        /// <summary>
+        /// Requests the update of both images in one go, all or nothing: each image is swapped in on
+        /// the next reboot as a revertible test image.
+        /// </summary>
+        /// <param name="images">
+        /// The images to update, each verified beforehand by
+        /// <see cref="CompleteUpdateSession(UpdateSession, bool)"/> with <c>requestUpdate</c> set to
+        /// <see langword="false"/>. Typically <see cref="ImageType.NanoClr"/> and
+        /// <see cref="ImageType.Deployment"/>.
+        /// </param>
+        /// <returns>
+        /// <see cref="UpdateSessionResult.Success"/> when every image is pending;
+        /// <see cref="UpdateSessionResult.NoImage"/> when one of them is not waiting to be requested (not
+        /// completed with <c>requestUpdate</c> <see langword="false"/>, or dropped since, e.g. by a
+        /// reboot); <see cref="UpdateSessionResult.Busy"/> while a session or an erase is under way on
+        /// one of them; <see cref="UpdateSessionResult.SwapInFlight"/> when one of them already has a
+        /// swap pending (the images keep waiting); <see cref="UpdateSessionResult.BadMagic"/>,
+        /// <see cref="UpdateSessionResult.BadTlv"/> or <see cref="UpdateSessionResult.HashMismatch"/>
+        /// when an image no longer verifies; <see cref="UpdateSessionResult.FlashError"/> when marking an
+        /// image pending failed (the secondary slots already marked are erased, so nothing is left
+        /// pending); <see cref="UpdateSessionResult.BadArgument"/> for an empty list, an unknown image
+        /// or an image listed twice.
+        /// </returns>
+        /// <exception cref="ArgumentNullException"><paramref name="images"/> is <see langword="null"/>.</exception>
+        /// <remarks>
+        /// <para>
+        /// Use it when images depend on each other, typically a nanoCLR and the deployment built for it:
+        /// a power loss or any reboot while the second image is still downloading must not swap the
+        /// first one in alone. Every image is verified again before any of them is marked pending.
+        /// </para>
+        /// <para>
+        /// After the reboot both run as test images and are kept or reverted as a pair:
+        /// <see cref="ConfirmDeploymentImage"/> confirms the nanoCLR as well, and a deployment that is
+        /// not confirmed reverts both. See "Updating the nanoCLR and the deployment together" in the
+        /// documentation.
+        /// </para>
+        /// </remarks>
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public static extern UpdateSessionResult RequestUpdate(params ImageType[] images);
 
         /// <summary>
         /// Closes an update session without completing it.
@@ -298,7 +376,16 @@ namespace nanoFramework.Runtime.InFieldUpdate
         /// Confirms (makes permanent) the <see cref="ImageType.Deployment"/> validation. If not called
         /// while the deployment image is in test state, the previous image is restored on the next reboot.
         /// </summary>
-        /// <returns><see langword="true"/> if the image was confirmed; otherwise, <see langword="false"/>.</returns>
+        /// <returns>
+        /// <see langword="true"/> if the image was confirmed (with the nanoCLR, when they were updated
+        /// together); otherwise, <see langword="false"/>.
+        /// </returns>
+        /// <remarks>
+        /// When the nanoCLR and the deployment were swapped in by the same reboot, they are kept or
+        /// reverted as a pair: the nanoCLR stays unconfirmed (<see cref="UpdateStatus.Testing"/>) until
+        /// this method confirms it right after the deployment. See "Updating the nanoCLR and the
+        /// deployment together" in the documentation.
+        /// </remarks>
         [MethodImpl(MethodImplOptions.InternalCall)]
         public static extern bool ConfirmDeploymentImage();
 
@@ -319,7 +406,8 @@ namespace nanoFramework.Runtime.InFieldUpdate
         /// revert to; otherwise, <see langword="true"/>.
         /// </returns>
         /// <remarks>
-        /// The running nanoCLR image is already confirmed at startup, so this cannot "un-confirm" it.
+        /// The running nanoCLR image is confirmed at startup (or, after an update together with the
+        /// deployment, by <see cref="ConfirmDeploymentImage"/>), so this cannot "un-confirm" it.
         /// It can only schedule a swap-in of a valid image that is already present in its secondary
         /// slot (for example, a copy of the previous firmware kept there). A reboot is required to
         /// complete the swap.

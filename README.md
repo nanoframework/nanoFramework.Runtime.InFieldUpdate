@@ -69,6 +69,9 @@ UpdateManager.ConfirmDeploymentImage();
 - [Confirm and revert](docs/confirm-and-revert.md) - `ConfirmDeploymentImage`,
   `RequestDeploymentRevert`, `RequestClrRevert`, `RequestReboot`, the test cycle and the
   `[DeploymentConfirmationTimeout]` failsafe.
+- [Updating the nanoCLR and the deployment together](docs/updating-clr-and-deployment.md) -
+  `RequestUpdate`, staging a nanoCLR and the deployment built for it so they land, and roll back,
+  as a pair.
 - [Writing an update provider](docs/writing-an-update-provider.md) - how to build an update library
   that fetches images from a server or other provider, end to end, on the `IUpdateProvider`
   contract from the `nanoFramework.Runtime.InFieldUpdate.Provider` package.
