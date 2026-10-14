@@ -110,7 +110,7 @@ Marks every listed image pending for a test swap on the next reboot, or none of 
 | `Success` | Every image is pending (`TestPending`). | `RequestReboot` now or later. |
 | `NoImage` | An image is not waiting: not completed with `requestUpdate: false`, already requested, or dropped since (reboot, new session, erase). | Resume and complete it again with `requestUpdate: false`. |
 | `Busy` | A session or an erase is under way on one of the images. | Retry once it is done. |
-| `SwapInFlight` | One of the images already has a swap pending (requested by some other call). The images keep waiting. | Reboot to let that swap through, then stage the images again; or erase that image's secondary slot and stage it again. |
+| `SwapInFlight` | One of the images already has a swap pending (requested by some other call). The images keep waiting. | **Don't reboot**: that image would be swapped in alone, and if it is the nanoCLR that is the stuck case described above. Cancel the pending swap with `EraseSecondaryImage` on that image, stage it again with `requestUpdate: false`, then call `RequestUpdate` again. |
 | `BadMagic`, `BadTlv`, `HashMismatch` | An image no longer verifies. | Download it again. |
 | `FlashError` | Marking an image pending failed; the slots already marked were erased. | Download the erased images again. |
 | `BadArgument` | Empty list, unknown image, or an image listed twice. | Fix the call. |
